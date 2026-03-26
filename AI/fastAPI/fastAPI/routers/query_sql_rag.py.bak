@@ -1,0 +1,186 @@
+# routers/query_sql_rag.py - RAG版本的SQL查询路由
+from fastapi import APIRouter, Depends, HTTPException, Body
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
+from sqlalchemy.exc import ProgrammingError, OperationalError, DatabaseError
+from db_rag_only import get_session
+
+router = APIRouter()
+
+@router.post("/run-sql", summary="执行 SQL 语句")
+async def run_sql(
+    sql: str = Body(..., embed=True, description="SQL 查询语句"),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    执行SQL查询语句
+    
+    支持的操作：
+    - SELECT 查询
+    - INSERT 插入
+    - UPDATE 更新
+    - DELETE 删除
+    - 其他SQL语句
+    
+    返回格式：
+    - success: 操作是否成功
+    - data: 查询结果（对于SELECT语句）
+    - message: 操作信息
+    """
+    try:
+        # 执行 SQL 并返回结果
+        result = await session.execute(text(sql))
+        
+        # 对于SELECT语句，返回查询结果
+        if sql.strip().upper().startswith('SELECT'):
+            rows = result.mappings().all()  # 转为 dict 列表
+            return {
+                "success": True, 
+                "data": rows,
+                "message": f"查询成功，返回 {len(rows)} 条记录"
+            }
+        else:
+            # 对于INSERT/UPDATE/DELETE等语句，提交事务并返回影响行数
+            await session.commit()
+            affected_rows = result.rowcount if hasattr(result, 'rowcount') else 0
+            return {
+                "success": True,
+                "data": [],
+                "message": f"操作成功，影响 {affected_rows} 行"
+            }
+
+    except ProgrammingError as e:
+        # SQL 语法错误
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "errorType": "SQL语法错误",
+                "message": f"请检查 SQL 语句是否书写正确；底层提示：{e.orig or e}"
+            },
+        )
+
+    except OperationalError as e:
+        # 运行时问题（表不存在、权限不足、连接超时等）
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "errorType": "数据库运行错误",
+                "message": f"可能是表/列不存在、权限不足或连接问题；底层提示：{e.orig or e}"
+            },
+        )
+
+    except DatabaseError as e:
+        # 其他数据库错误（类型转换、数据截断等）
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "errorType": "通用数据库错误",
+                "message": f"数据库操作失败；底层提示：{e.orig or e}"
+            },
+        )
+
+    except Exception as e:
+        # 未知错误
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "success": False,
+                "errorType": "未知错误",
+                "message": f"系统内部异常，请联系管理员；详情：{e}"
+            },
+        )
+
+@router.get("/health", summary="SQL服务健康检查")
+async def sql_health_check(session: AsyncSession = Depends(get_session)):
+    """检查SQL服务和数据库连接状态"""
+    try:
+        # 执行简单查询测试连接
+        result = await session.execute(text("SELECT 1 as test"))
+        test_result = result.scalar()
+        
+        if test_result == 1:
+            return {
+                "success": True,
+                "status": "healthy",
+                "message": "SQL服务运行正常，数据库连接正常"
+            }
+        else:
+            return {
+                "success": False,
+                "status": "unhealthy",
+                "message": "数据库连接异常"
+            }
+            
+    except Exception as e:
+        return {
+            "success": False,
+            "status": "unhealthy",
+            "message": f"SQL服务异常: {str(e)}"
+        }
+
+@router.get("/tables", summary="获取数据库表列表")
+async def get_tables(session: AsyncSession = Depends(get_session)):
+    """获取当前数据库中的所有表"""
+    try:
+        # MySQL查询所有表
+        result = await session.execute(text("SHOW TABLES"))
+        tables = [row[0] for row in result.fetchall()]
+        
+        return {
+            "success": True,
+            "data": tables,
+            "message": f"成功获取 {len(tables)} 个表"
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "success": False,
+                "errorType": "获取表列表失败",
+                "message": f"无法获取数据库表列表: {str(e)}"
+            }
+        )
+
+@router.get("/table/{table_name}/structure", summary="获取表结构")
+async def get_table_structure(
+    table_name: str,
+    session: AsyncSession = Depends(get_session)
+):
+    """获取指定表的结构信息"""
+    try:
+        # 获取表结构
+        result = await session.execute(text(f"DESCRIBE {table_name}"))
+        columns = []
+        
+        for row in result.fetchall():
+            columns.append({
+                "field": row[0],
+                "type": row[1],
+                "null": row[2],
+                "key": row[3],
+                "default": row[4],
+                "extra": row[5]
+            })
+        
+        return {
+            "success": True,
+            "data": {
+                "table_name": table_name,
+                "columns": columns
+            },
+            "message": f"成功获取表 {table_name} 的结构信息"
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "errorType": "获取表结构失败",
+                "message": f"无法获取表 {table_name} 的结构: {str(e)}"
+            }
+        )

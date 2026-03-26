@@ -1,0 +1,16 @@
+# Function Calling 功能所需的额外依赖包
+# 基础依赖（如果还没安装的话）
+fastapi>=0.104.0
+uvicorn>=0.24.0
+sqlalchemy>=2.0.0
+asyncmy>=0.2.8
+aiosqlite>=0.19.0
+
+# AI和向量化相关
+sentence-transformers>=2.2.0
+chromadb>=0.4.0
+llama-cpp-python>=0.2.0
+
+# 其他工具包
+pydantic>=2.0.0
+python-multipart>=0.0.6

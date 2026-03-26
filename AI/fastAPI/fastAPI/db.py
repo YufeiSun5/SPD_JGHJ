@@ -1,0 +1,27 @@
+# db.py
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+from config import DATABASE_URL
+
+# 创建数据库异步引擎（连接池）
+# pool_pre_ping=True 会在每次获取连接前执行 SELECT 1
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=False,
+    pool_size=10,
+    max_overflow=20,
+    pool_pre_ping=True,   # <--- 开启预 ping
+    future=True,
+)
+
+# 创建 session 工厂（每次使用都开新连接）
+async_session = sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False
+)
+
+# 获取 session
+async def get_session() -> AsyncSession:
+    async with async_session() as session:
+        yield session

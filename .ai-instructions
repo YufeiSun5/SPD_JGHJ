@@ -1,0 +1,43 @@
+# SPD_JGHJ SCADA - VS Code AI Instructions
+
+本文件是 VS Code AI 的编辑器适配层；仓库正式规则以 AGENTS.md、instructions/ 与 MEMORY.md 为准，本文件只做索引和速查，不覆盖它们。
+
+## 规则来源
+
+| 层级 | 路径 | 用途 |
+|------|------|------|
+| 全局事实与长期约束 | AGENTS.md | 项目定位、桌面调用模型、MQTT 主入口、并发边界、三语要求 |
+| 稳定默认规则 | instructions/ | 后端改动规则、前端改动规则、代码风格与验证底线 |
+| 可重复操作流程 | skills/ | Wails 开发/构建、MQTT 与 MySQL 配置、人工验证 SOP |
+| 补充说明文档 | docs/ | 架构摘要、烟雾验证路径、文档索引 |
+| 开发进度记忆 | MEMORY.md | 当前项目状态、长期提醒、文档修正结论 |
+
+遇到冲突时，优先级为 AGENTS.md > instructions/ > MEMORY.md > 本文件。
+
+## 关键约束速查
+
+### 桌面架构
+- 当前项目是 Go + Wails + Vue 3 + Naive UI 的桌面 SCADA 系统，不是前后端 HTTP API 分离项目。
+- 前端主要通过 window.go.main.App 和 wailsjs 直接调用 Go 绑定方法。
+- 修改前端时优先复用已有绑定方法，不要先入为主新增 HTTP API。
+
+### 数据入口与后端
+- 现场实时数据主入口是 MQTT，多网关配置以数据库表为准。
+- desktop/main.go 启动时会初始化数据库、TagManager、Worker、TaskScheduler、GatewayManager、ConfigReloader。
+- 慢 IO 不要塞回 MQTT 回调或核心热路径，保持 memory-first 和 channel 解耦。
+
+### 前端
+- 当前前端是 Vue 3 + Vite + Naive UI，路由使用 Hash 模式以适配 Wails 桌面壳。
+- 保持桌面端交互语义，不要把浏览器站点式假设直接套进桌面页面。
+
+### AI 能力
+- AI 问答属于旁路能力，desktop/ai_client.go 通过本机 http://127.0.0.1:8006 调用 FastAPI 服务。
+- 不要把 AI 服务误写成主生产控制链路的一部分。
+
+### 注释与验证
+- 业务核心位置必须补充中英日三语注释或说明。
+- 功能改动后至少保留一条可执行验证路径；桌面功能优先给出 wails dev + 页面人工验证步骤。
+
+### 知识维护
+- 做完一段稳定工作后，主动检查 AGENTS.md、MEMORY.md、docs/、instructions/、skills/ 是否需要同步更新。
+

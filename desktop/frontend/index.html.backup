@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能制造MES系统</title>
+    <!-- 本地资源 - 离线可用 -->
+    <script src="assets/js/vue.global.prod.js"></script>
+    <link rel="stylesheet" href="assets/css/fontawesome.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Microsoft YaHei', system-ui; background: #0a0e27; color: #fff; overflow: hidden; }
+        
+        /* 自定义标题栏 */
+        .custom-titlebar {
+            height: 32px;
+            background: rgba(10, 14, 39, 0.98);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            user-select: none;
+            transition: all 0.3s;
+            -webkit-app-region: drag; /* 👈 整个标题栏默认可拖拽 */
+            --wails-draggable: drag; /* 👈 Wails拖拽属性 */
+        }
+        .custom-titlebar.hidden { display: none; }
+        .titlebar-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            color: rgba(255,255,255,0.8);
+            flex: 1;
+            -webkit-app-region: drag; /* 👈 确保左侧区域可拖拽 */
+            --wails-draggable: drag; /* 👈 Wails拖拽属性 */
+        }
+        .titlebar-icon {
+            font-size: 16px;
+            color: #667eea;
+        }
+        .window-controls {
+            display: flex;
+            -webkit-app-region: no-drag; /* 👈 按钮区域禁止拖拽，允许点击 */
+            --wails-draggable: no-drag; /* 👈 Wails禁止拖拽 */
+        }
+        .window-btn {
+            width: 46px;
+            height: 32px;
+            border: none;
+            background: transparent;
+            color: rgba(255,255,255,0.7);
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+            -webkit-app-region: no-drag; /* 👈 确保按钮不拖拽 */
+            --wails-draggable: no-drag; /* 👈 Wails禁止拖拽 */
+        }
+        .window-btn:hover {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+        .window-btn.close:hover {
+            background: #e81123;
+            color: #fff;
+        }
+        
+        /* 顶部导航栏 */
+        .top-nav {
+            height: 60px;
+            background: rgba(20, 30, 48, 0.95);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.3);
+            position: relative;
+            z-index: 100;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .top-nav.hidden { display: none; }
+        
+        /* 全屏提示 */
+        .fullscreen-hint {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 13px;
+            color: #fff;
+            z-index: 9999;
+            animation: fadeOut 3s forwards;
+        }
+        @keyframes fadeOut {
+            0%, 70% { opacity: 1; }
+            100% { opacity: 0; pointer-events: none; }
+        }
+        .logo {
+            font-size: 18px;
+            font-weight: bold;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .logo i {
+            color: #667eea;
+        }
+        .top-menu {
+            display: flex;
+            gap: 5px;
+            margin-left: 40px;
+            flex: 1;
+        }
+        .top-menu-item {
+            padding: 10px 20px;
+            color: rgba(255,255,255,0.7);
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .top-menu-item i {
+            font-size: 16px;
+        }
+        .top-menu-item:hover {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+        .top-menu-item.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            font-weight: bold;
+        }
+        .top-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .icon-btn {
+            width: 36px;
+            height: 36px;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+        .icon-btn:hover {
+            background: rgba(255,255,255,0.2);
+            transform: scale(1.05);
+        }
+
+        /* 主容器 */
+        .main-container {
+            display: flex;
+            height: calc(100vh - 92px);
+        }
+        .main-container.sidebar-mode {
+            height: calc(100vh - 32px);
+        }
+        .main-container.fullscreen-mode {
+            height: 100vh;
+        }
+
+        /* 左侧菜单 */
+        .sidebar {
+            width: 240px;
+            background: rgba(20, 30, 48, 0.95);
+            backdrop-filter: blur(10px);
+            color: #ecf0f1;
+            overflow-y: auto;
+            transition: all 0.3s;
+            border-right: 1px solid rgba(255,255,255,0.1);
+            display: none;
+        }
+        .sidebar.show {
+            display: block;
+        }
+        .sidebar-header {
+            padding: 20px;
+            font-size: 18px;
+            font-weight: bold;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .sidebar-header i {
+            color: #667eea;
+            margin-right: 10px;
+        }
+        .menu-item {
+            padding: 15px 20px;
+            cursor: pointer;
+            border-left: 3px solid transparent;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: rgba(255,255,255,0.7);
+        }
+        .menu-item i {
+            font-size: 18px;
+            width: 24px;
+            text-align: center;
+        }
+        .menu-item:hover {
+            background: rgba(255,255,255,0.05);
+            border-left-color: #667eea;
+            color: #fff;
+        }
+        .menu-item.active {
+            background: linear-gradient(90deg, rgba(102, 126, 234, 0.2) 0%, transparent 100%);
+            border-left-color: #667eea;
+            color: #fff;
+            font-weight: bold;
+        }
+
+        /* 内容区域 */
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            background: #0a0e27;
+        }
+
+        /* 驾驶舱全屏样式 */
+        .dashboard {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            padding: 0;
+        }
+        .dashboard-header {
+            padding: 30px 40px 20px;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        }
+        .dashboard-title {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .dashboard-title i {
+            color: #667eea;
+        }
+        .dashboard-subtitle {
+            font-size: 14px;
+            color: rgba(255,255,255,0.6);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            padding: 0 40px 20px;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 25px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            position: relative;
+            overflow: hidden;
+        }
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 100px;
+            height: 100px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            transform: translate(30%, -30%);
+        }
+        .stat-card.green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+        .stat-card.orange { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .stat-card.blue { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        .stat-label { 
+            font-size: 14px; 
+            opacity: 0.9; 
+            margin-bottom: 10px; 
+            position: relative; 
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .stat-label i {
+            font-size: 20px;
+        }
+        .stat-value { font-size: 42px; font-weight: bold; position: relative; z-index: 1; }
+        .tag-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+            padding: 20px 40px 40px;
+            flex: 1;
+            overflow-y: auto;
+        }
+        .tag-card {
+            background: rgba(20, 30, 48, 0.6);
+            backdrop-filter: blur(10px);
+            padding: 24px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: all 0.3s;
+        }
+        .tag-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            border-color: rgba(102, 126, 234, 0.5);
+        }
+        .tag-card.alarm-hh { border-color: #e74c3c; box-shadow: 0 4px 20px rgba(231, 76, 60, 0.3); }
+        .tag-card.alarm-h { border-color: #e67e22; box-shadow: 0 4px 20px rgba(230, 126, 34, 0.3); }
+        .tag-card.alarm-l { border-color: #f39c12; box-shadow: 0 4px 20px rgba(243, 156, 18, 0.3); }
+        .tag-card.alarm-ll { border-color: #e74c3c; box-shadow: 0 4px 20px rgba(231, 76, 60, 0.3); }
+        .tag-name { 
+            font-size: 13px; 
+            color: rgba(255,255,255,0.5); 
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .tag-name i {
+            font-size: 14px;
+        }
+        .tag-value { font-size: 32px; font-weight: bold; color: #fff; }
+        .tag-unit { font-size: 14px; color: rgba(255,255,255,0.5); margin-left: 8px; }
+        .alarm-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            margin-left: 12px;
+            background: #e74c3c;
+            color: #fff;
+            font-weight: bold;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        /* 其他页面通用样式 */
+        .page-container {
+            padding: 40px;
+        }
+        .page-title {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .page-title i {
+            color: #667eea;
+        }
+        .page-subtitle {
+            font-size: 14px;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 30px;
+        }
+        .card {
+            background: rgba(20, 30, 48, 0.6);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        /* 动画 */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-enter-active {
+            animation: fadeIn 0.4s ease-out;
+        }
+        .fade-leave-active {
+            animation: fadeIn 0.4s ease-out reverse;
+        }
+
+        /* 滚动条样式 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.05);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        /* 表格样式 */
+        .table-container {
+            overflow-x: auto;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        .data-table thead {
+            background: rgba(102, 126, 234, 0.2);
+        }
+        .data-table th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: rgba(255,255,255,0.9);
+            border-bottom: 2px solid rgba(255,255,255,0.1);
+        }
+        .data-table td {
+            padding: 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            color: rgba(255,255,255,0.8);
+        }
+        .data-table tbody tr {
+            transition: all 0.2s;
+        }
+        .data-table tbody tr:hover {
+            background: rgba(255,255,255,0.03);
+        }
+
+        /* 按钮样式 */
+        .action-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+        }
+        .action-btn.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+        }
+        .action-btn.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        .table-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-right: 5px;
+            background: rgba(255,255,255,0.1);
+            color: rgba(255,255,255,0.8);
+        }
+        .table-btn:hover {
+            transform: scale(1.05);
+        }
+        .table-btn.edit:hover {
+            background: #3498db;
+            color: #fff;
+        }
+        .table-btn.delete:hover {
+            background: #e74c3c;
+            color: #fff;
+        }
+
+        /* 状态徽章 */
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            display: inline-block;
+        }
+        .status-badge.pending {
+            background: rgba(52, 152, 219, 0.2);
+            color: #3498db;
+            border: 1px solid #3498db;
+        }
+        .status-badge.running {
+            background: rgba(46, 204, 113, 0.2);
+            color: #2ecc71;
+            border: 1px solid #2ecc71;
+        }
+        .status-badge.completed {
+            background: rgba(155, 89, 182, 0.2);
+            color: #9b59b6;
+            border: 1px solid #9b59b6;
+        }
+        .status-badge.cancelled {
+            background: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
+            border: 1px solid #e74c3c;
+        }
+
+        /* 弹窗样式 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            animation: fadeIn 0.3s;
+        }
+        .modal-container {
+            background: rgba(20, 30, 48, 0.98);
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.1);
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            animation: slideUp 0.3s;
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .modal-header h3 {
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #fff;
+        }
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            color: rgba(255,255,255,0.7);
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-close:hover {
+            background: rgba(255,255,255,0.2);
+            color: #fff;
+        }
+        .modal-body {
+            padding: 24px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        .modal-btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .modal-btn.cancel {
+            background: rgba(255,255,255,0.1);
+            color: rgba(255,255,255,0.8);
+        }
+        .modal-btn.cancel:hover {
+            background: rgba(255,255,255,0.15);
+        }
+        .modal-btn.confirm {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+        }
+        .modal-btn.confirm:hover {
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        /* 表单样式 */
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: rgba(255,255,255,0.8);
+            font-weight: 500;
+        }
+        .form-group .required {
+            color: #e74c3c;
+        }
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            background: rgba(255,255,255,0.08);
+        }
+        .form-group textarea {
+            resize: vertical;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 全屏提示 -->
+        <div v-if="showFullscreenHint" class="fullscreen-hint">
+            <i class="fas fa-info-circle"></i> 按 ESC 键退出全屏
+        </div>
+
+        <!-- 自定义标题栏 -->
+        <div class="custom-titlebar" :class="{hidden: isFullscreen}">
+            <div class="titlebar-left">
+                <i class="fas fa-industry titlebar-icon"></i>
+                <span>智能制造MES系统</span>
+            </div>
+            <div class="window-controls">
+                <button class="window-btn" @click="minimizeWindow" title="最小化">
+                    <i class="fas fa-window-minimize"></i>
+                </button>
+                <button class="window-btn" @click="toggleMaximize" title="最大化">
+                    <i class="far fa-window-maximize"></i>
+                </button>
+                <button class="window-btn" @click="toggleFullscreen" title="全屏">
+                    <i class="fas fa-expand"></i>
+                </button>
+                <button class="window-btn close" @click="closeWindow" title="关闭">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- 顶部导航栏 -->
+        <div class="top-nav" :class="{hidden: menuMode === 'sidebar' || isFullscreen}">
+            <div class="logo">
+                <i class="fas fa-industry"></i>
+                智能制造MES
+            </div>
+            <div class="top-menu">
+                <div v-for="item in menuItems" :key="item.key"
+                     :class="['top-menu-item', {active: currentPage === item.key}]"
+                     @click="currentPage = item.key">
+                    <i :class="item.icon"></i>
+                    <span>{{ item.label }}</span>
+                </div>
+            </div>
+            <div class="top-controls">
+                <button class="icon-btn" @click="toggleMenuMode" title="切换菜单模式">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- 主容器 -->
+        <div class="main-container" :class="{'sidebar-mode': menuMode === 'sidebar', 'fullscreen-mode': isFullscreen}">
+            <!-- 左侧菜单 -->
+            <div class="sidebar" :class="{show: menuMode === 'sidebar' && !isFullscreen}">
+                <div class="sidebar-header">
+                    <span><i class="fas fa-industry"></i>智能制造MES</span>
+                    <button class="icon-btn" @click="toggleMenuMode" title="切换菜单模式" style="width: 32px; height: 32px;">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                </div>
+                <div v-for="item in menuItems" :key="item.key"
+                     :class="['menu-item', {active: currentPage === item.key}]"
+                     @click="currentPage = item.key">
+                    <i :class="item.icon"></i>
+                    <span>{{ item.label }}</span>
+                </div>
+            </div>
+
+            <!-- 内容区域 -->
+            <div class="content">
+                <transition name="fade" mode="out-in">
+                    <!-- 驾驶舱 -->
+                    <div v-if="currentPage === 'dashboard'" class="dashboard" key="dashboard">
+                        <div class="dashboard-header">
+                            <div class="dashboard-title">
+                                <i class="fas fa-chart-line"></i>
+                                实时监控驾驶舱
+                            </div>
+                            <div class="dashboard-subtitle">Real-time Monitoring Dashboard</div>
+                        </div>
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-label">
+                                    <i class="fas fa-database"></i>
+                                    测点总数
+                                </div>
+                                <div class="stat-value">{{ tags.length }}</div>
+                            </div>
+                            <div class="stat-card green">
+                                <div class="stat-label">
+                                    <i class="fas fa-microchip"></i>
+                                    Logic队列
+                                </div>
+                                <div class="stat-value">{{ channels.logic_chan || 0 }}</div>
+                            </div>
+                            <div class="stat-card orange">
+                                <div class="stat-label">
+                                    <i class="fas fa-sync-alt"></i>
+                                    Change队列
+                                </div>
+                                <div class="stat-value">{{ channels.change_chan || 0 }}</div>
+                            </div>
+                            <div class="stat-card blue">
+                                <div class="stat-label">
+                                    <i class="fas fa-clock"></i>
+                                    Cycle队列
+                                </div>
+                                <div class="stat-value">{{ channels.cycle_chan || 0 }}</div>
+                            </div>
+                        </div>
+                        <div class="tag-grid">
+                            <div v-for="tag in tags" :key="tag.var_name" 
+                                 :class="['tag-card', tag.alarm_state ? 'alarm-' + tag.alarm_state.toLowerCase() : '']">
+                                <div class="tag-name">
+                                    <i class="fas fa-tag"></i>
+                                    {{ tag.display_name || tag.var_name }}
+                                </div>
+                                <div class="tag-value">
+                                    {{ tag.value }}
+                                    <span class="tag-unit">{{ tag.unit }}</span>
+                                    <span v-if="tag.alarm_state" class="alarm-badge">
+                                        <i class="fas fa-exclamation-triangle"></i> {{ tag.alarm_state }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 生产计划管理 -->
+                    <div v-else-if="currentPage === 'production'" class="page-container" key="production">
+                        <div class="page-title">
+                            <i class="fas fa-clipboard-list"></i>
+                            生产计划管理
+                        </div>
+                        <div class="page-subtitle">Production Planning & Management</div>
+                        
+                        <!-- 操作按钮 -->
+                        <div style="margin-bottom: 20px;">
+                            <button class="action-btn primary" @click="showPlanModal('add')">
+                                <i class="fas fa-plus"></i> 新增计划
+                            </button>
+                        </div>
+
+                        <!-- 计划列表 -->
+                        <div class="card">
+                            <div class="table-container">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>计划编号</th>
+                                            <th>产品名称</th>
+                                            <th>计划数量</th>
+                                            <th>已完成</th>
+                                            <th>开始时间</th>
+                                            <th>结束时间</th>
+                                            <th>状态</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-if="plans.length === 0">
+                                            <td colspan="8" style="text-align: center; color: rgba(255,255,255,0.5); padding: 40px;">
+                                                <i class="fas fa-inbox" style="font-size: 48px; margin-bottom: 10px; display: block;"></i>
+                                                暂无计划数据
+                                            </td>
+                                        </tr>
+                                        <tr v-for="plan in plans" :key="plan.id">
+                                            <td>{{ plan.plan_no }}</td>
+                                            <td>{{ plan.product_name }}</td>
+                                            <td>{{ plan.quantity }}</td>
+                                            <td>{{ plan.completed || 0 }}</td>
+                                            <td>{{ plan.start_time }}</td>
+                                            <td>{{ plan.end_time }}</td>
+                                            <td>
+                                                <span :class="['status-badge', plan.status]">
+                                                    {{ getStatusText(plan.status) }}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <button class="table-btn edit" @click="showPlanModal('edit', plan)" title="编辑">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <button class="table-btn delete" @click="deletePlan(plan)" title="删除">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- 新增/编辑计划弹窗 -->
+                        <div v-if="planModal.show" class="modal-overlay" @click.self="closePlanModal">
+                            <div class="modal-container">
+                                <div class="modal-header">
+                                    <h3>
+                                        <i class="fas fa-clipboard-list"></i>
+                                        {{ planModal.mode === 'add' ? '新增计划' : '编辑计划' }}
+                                    </h3>
+                                    <button class="modal-close" @click="closePlanModal">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="form-group">
+                                        <label>计划编号 <span class="required">*</span></label>
+                                        <input v-model="planModal.form.plan_no" type="text" placeholder="请输入计划编号" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label>产品名称 <span class="required">*</span></label>
+                                        <input v-model="planModal.form.product_name" type="text" placeholder="请输入产品名称" />
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>计划数量 <span class="required">*</span></label>
+                                            <input v-model.number="planModal.form.quantity" type="number" min="0" placeholder="请输入数量" />
+                                        </div>
+                                        <div class="form-group">
+                                            <label>已完成数量</label>
+                                            <input v-model.number="planModal.form.completed" type="number" min="0" placeholder="已完成数量" />
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>开始时间 <span class="required">*</span></label>
+                                            <input v-model="planModal.form.start_time" type="datetime-local" />
+                                        </div>
+                                        <div class="form-group">
+                                            <label>结束时间 <span class="required">*</span></label>
+                                            <input v-model="planModal.form.end_time" type="datetime-local" />
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>状态 <span class="required">*</span></label>
+                                        <select v-model="planModal.form.status">
+                                            <option value="pending">待开始</option>
+                                            <option value="running">进行中</option>
+                                            <option value="completed">已完成</option>
+                                            <option value="cancelled">已取消</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>备注</label>
+                                        <textarea v-model="planModal.form.remark" rows="3" placeholder="请输入备注信息"></textarea>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button class="modal-btn cancel" @click="closePlanModal">取消</button>
+                                    <button class="modal-btn confirm" @click="savePlan">
+                                        <i class="fas fa-save"></i> 保存
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 不良品管理 -->
+                    <div v-else-if="currentPage === 'quality'" class="page-container" key="quality">
+                        <div class="page-title">
+                            <i class="fas fa-exclamation-circle"></i>
+                            不良品管理
+                        </div>
+                        <div class="page-subtitle">Quality Control & Defect Management</div>
+                        <div class="card">
+                            <p style="color: rgba(255,255,255,0.6);">质量检验、不良品统计、原因分析...</p>
+                        </div>
+                    </div>
+
+                    <!-- 报警管理 -->
+                    <div v-else-if="currentPage === 'alarm'" class="page-container" key="alarm">
+                        <div class="page-title">
+                            <i class="fas fa-bell"></i>
+                            报警管理
+                        </div>
+                        <div class="page-subtitle">Alarm Management System</div>
+                        <div class="card">
+                            <p style="color: rgba(255,255,255,0.6);">报警记录、报警确认、报警统计...</p>
+                        </div>
+                    </div>
+
+                    <!-- 人员管理 -->
+                    <div v-else-if="currentPage === 'staff'" class="page-container" key="staff">
+                        <div class="page-title">
+                            <i class="fas fa-users"></i>
+                            人员管理
+                        </div>
+                        <div class="page-subtitle">Staff Management System</div>
+                        <div class="card">
+                            <p style="color: rgba(255,255,255,0.6);">班组管理、员工档案、考勤记录...</p>
+                        </div>
+                    </div>
+
+                    <!-- 设备状态 -->
+                    <div v-else-if="currentPage === 'device'" class="page-container" key="device">
+                        <div class="page-title">
+                            <i class="fas fa-cogs"></i>
+                            设备状态
+                        </div>
+                        <div class="page-subtitle">Equipment Status Monitor</div>
+                        <div class="card">
+                            <p style="color: rgba(255,255,255,0.6);">设备监控、运行状态、维护记录...</p>
+                        </div>
+                    </div>
+
+                    <!-- 智能助手 -->
+                    <div v-else-if="currentPage === 'assistant'" class="page-container" key="assistant">
+                        <div class="page-title">
+                            <i class="fas fa-robot"></i>
+                            智能助手
+                        </div>
+                        <div class="page-subtitle">AI Assistant</div>
+                        <div class="card">
+                            <p style="color: rgba(255,255,255,0.6);">AI问答、智能推荐、数据分析...</p>
+                        </div>
+                    </div>
+                </transition>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import './wailsjs/runtime/runtime.js';
+        const { createApp } = Vue;
+        
+        createApp({
+            data() {
+                return {
+                    currentPage: 'dashboard',
+                    menuMode: 'top',
+                    isFullscreen: false,
+                    showFullscreenHint: false,
+                    tags: [],
+                    channels: {},
+                    menuItems: [
+                        { key: 'dashboard', label: '驾驶舱', icon: 'fas fa-chart-line' },
+                        { key: 'production', label: '生产计划管理', icon: 'fas fa-clipboard-list' },
+                        { key: 'quality', label: '不良品管理', icon: 'fas fa-exclamation-circle' },
+                        { key: 'alarm', label: '报警管理', icon: 'fas fa-bell' },
+                        { key: 'staff', label: '人员管理', icon: 'fas fa-users' },
+                        { key: 'device', label: '设备状态', icon: 'fas fa-cogs' },
+                        { key: 'assistant', label: '智能助手', icon: 'fas fa-robot' }
+                    ]
+                }
+            },
+            mounted() {
+                this.refresh();
+                setInterval(() => {
+                    if (this.currentPage === 'dashboard') {
+                        this.refresh();
+                    }
+                }, 1000);
+                
+                // 监听ESC键退出全屏
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && this.isFullscreen) {
+                        this.exitFullscreen();
+                    }
+                });
+            },
+            methods: {
+                async refresh() {
+                    try {
+                        if (window.go && window.go.main && window.go.main.App) {
+                            this.tags = await window.go.main.App.GetRealtimeData();
+                            this.channels = await window.go.main.App.GetChannelStats();
+                        }
+                    } catch(e) {
+                        console.error('刷新失败:', e);
+                    }
+                },
+                toggleMenuMode() {
+                    this.menuMode = this.menuMode === 'top' ? 'sidebar' : 'top';
+                },
+                minimizeWindow() {
+                    if (window.runtime && window.runtime.WindowMinimise) {
+                        window.runtime.WindowMinimise();
+                    }
+                },
+                toggleMaximize() {
+                    if (window.runtime && window.runtime.WindowToggleMaximise) {
+                        window.runtime.WindowToggleMaximise();
+                    }
+                },
+                toggleFullscreen() {
+                    if (this.isFullscreen) {
+                        this.exitFullscreen();
+                    } else {
+                        this.enterFullscreen();
+                    }
+                },
+                enterFullscreen() {
+                    this.isFullscreen = true;
+                    this.showFullscreenHint = true;
+                    setTimeout(() => {
+                        this.showFullscreenHint = false;
+                    }, 3000);
+                    
+                    // 使用Wails的全屏API
+                    if (window.runtime && window.runtime.WindowFullscreen) {
+                        window.runtime.WindowFullscreen();
+                    }
+                },
+                exitFullscreen() {
+                    this.isFullscreen = false;
+                    
+                    // 退出Wails全屏
+                    if (window.runtime && window.runtime.WindowUnfullscreen) {
+                        window.runtime.WindowUnfullscreen();
+                    }
+                },
+                closeWindow() {
+                    if (window.runtime && window.runtime.Quit) {
+                        window.runtime.Quit();
+                    }
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "IIoT监控",
+  "outputfilename": "斯频德焊机监测系统",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "http://localhost:34115",
+  "frameless": true,
+  "author": {
+    "name": "JGHJ",
+    "email": ""
+  },
+  "info": {
+    "companyName": "JGHJ",
+    "productName": "斯频德焊机监测系统",
+    "productVersion": "1.0.5",
+    "copyright": "Copyright © 2024 JGHJ. All rights reserved.",
+    "comments": "斯频德焊机监测系统 - 工业物联网实时监控解决方案"
+  }
+}

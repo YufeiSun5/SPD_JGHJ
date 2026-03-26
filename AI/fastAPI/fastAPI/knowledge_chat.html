@@ -1,0 +1,1758 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能知识库助手</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1200px;
+            background: #1e1e2e;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            overflow: visible;
+            display: flex;
+            height: 80vh;
+            position: relative;
+            border: 1px solid #2d2d3d;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: #252537;
+            border-right: 1px solid #3d3d4d;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .sidebar.collapsed {
+            width: 0;
+            min-width: 0;
+            overflow: hidden;
+            border-right: none;
+        }
+
+        .sidebar.collapsed .sidebar-content,
+        .sidebar.collapsed .sidebar-header {
+            display: none;
+        }
+
+        .sidebar-toggle {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            transform: translateY(-50%);
+            width: 25px;
+            height: 60px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 0 10px 10px 0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            z-index: 1000;
+            transition: all 0.3s ease;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+
+        .sidebar-toggle:hover {
+            background: #1e7e34;
+            width: 30px;
+        }
+
+        .sidebar-toggle:active {
+            transform: translateY(-50%) scale(0.95);
+        }
+
+        .sidebar-toggle.expanded {
+            left: 275px;
+            background: #007bff;
+        }
+
+        .sidebar-toggle.expanded:hover {
+            background: #0056b3;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            text-align: center;
+            font-weight: bold;
+            border-bottom: 1px solid #3d3d4d;
+        }
+
+        .sidebar-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .knowledge-section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #b0b0c0;
+        }
+
+        .add-knowledge {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .add-knowledge input,
+        .add-knowledge textarea {
+            padding: 8px;
+            border: 1px solid #4d4d5d;
+            border-radius: 6px;
+            font-size: 14px;
+            background: #2d2d3d;
+            color: #e0e0e0;
+        }
+
+        .add-knowledge input::placeholder,
+        .add-knowledge textarea::placeholder {
+            color: #9090a0;
+        }
+
+        .add-knowledge input:focus,
+        .add-knowledge textarea:focus {
+            border-color: #007bff;
+            outline: none;
+            box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+        }
+
+        .add-knowledge textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .btn {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+
+        .knowledge-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #4d4d5d;
+            border-radius: 6px;
+            padding: 10px;
+            background: #2d2d3d;
+        }
+
+        .knowledge-item {
+            padding: 8px;
+            margin-bottom: 8px;
+            background: #3d3d4d;
+            border-radius: 4px;
+            font-size: 12px;
+            border-left: 3px solid #007bff;
+            position: relative;
+            color: #e0e0e0;
+        }
+
+        .knowledge-item .delete-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.7;
+            transition: opacity 0.3s;
+        }
+
+        .knowledge-item .delete-btn:hover {
+            opacity: 1;
+            background: #c82333;
+        }
+
+        .knowledge-item:hover .delete-btn {
+            opacity: 1;
+        }
+
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            padding: 20px;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            text-align: center;
+            font-weight: bold;
+            font-size: 18px;
+            border-bottom: 1px solid #3d3d4d;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #2d2d3d;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .message.user {
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+        }
+
+        .message.user .message-avatar {
+            background: #28a745;
+        }
+
+        .message.assistant .message-avatar {
+            background: #007bff;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            line-height: 1.4;
+        }
+
+        .message.user .message-content {
+            background: #007bff;
+            color: white;
+        }
+
+        .message.assistant .message-content {
+            background: #3d3d4d;
+            border: 1px solid #4d4d5d;
+            color: #e0e0e0;
+        }
+
+        .chat-input {
+            padding: 20px;
+            border-top: 1px solid #3d3d4d;
+            background: #252537;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #4d4d5d;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+            background: #2d2d3d;
+            color: #e0e0e0;
+        }
+
+        .input-group input::placeholder {
+            color: #9090a0;
+        }
+
+        .input-group input:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+        }
+
+        .send-btn {
+            padding: 12px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .send-btn:hover {
+            background: #0056b3;
+        }
+
+        .send-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .typing-indicator {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 15px;
+            margin: 10px 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        .thinking-steps {
+            display: none;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            border: 1px solid #4a9eff;
+            border-radius: 15px;
+            padding: 15px;
+            margin: 10px 0;
+            box-shadow: 0 8px 25px rgba(74, 158, 255, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .thinking-steps::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(74, 158, 255, 0.1), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .thinking-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: bold;
+            color: #4a9eff;
+            margin-bottom: 12px;
+            font-size: 14px;
+            text-shadow: 0 0 10px rgba(74, 158, 255, 0.5);
+        }
+
+        .thinking-content {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #e0e0e0;
+            font-family: 'Courier New', monospace;
+            min-height: 24px;
+            position: relative;
+            background: #1e1e2e;
+            border-radius: 8px;
+            padding: 10px;
+            border-left: 3px solid #4a9eff;
+        }
+
+        .thinking-text {
+            display: inline;
+        }
+
+        .thinking-cursor {
+            display: inline-block;
+            width: 2px;
+            height: 18px;
+            background: #4a9eff;
+            margin-left: 2px;
+            animation: blink 1s infinite;
+            box-shadow: 0 0 8px #4a9eff;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        .thinking-docs {
+            margin-top: 10px;
+            padding: 8px;
+            background: rgba(74, 158, 255, 0.1);
+            border-radius: 6px;
+            border-left: 3px solid #28a745;
+            font-size: 12px;
+            color: #a0a0a0;
+            display: none;
+        }
+
+        .thinking-docs-title {
+            color: #28a745;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .doc-preview {
+            margin: 2px 0;
+            padding: 2px 4px;
+            background: rgba(40, 167, 69, 0.1);
+            border-radius: 3px;
+            font-size: 11px;
+        }
+
+        .typing-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: white;
+            font-weight: 500;
+        }
+
+        .ai-avatar {
+            width: 35px;
+            height: 35px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .typing-text {
+            font-size: 16px;
+            margin-right: 8px;
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .typing-dots span {
+            width: 8px;
+            height: 8px;
+            background: white;
+            border-radius: 50%;
+            animation: typing 1.4s infinite ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .typing-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dots span:nth-child(2) { animation-delay: -0.16s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0s; }
+
+        @keyframes typing {
+            0%, 80%, 100% { 
+                transform: scale(0.8) translateY(0);
+                opacity: 0.5;
+            }
+            40% { 
+                transform: scale(1.2) translateY(-8px);
+                opacity: 1;
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        @keyframes glow {
+            0% { box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3); }
+            100% { box-shadow: 0 6px 25px rgba(102, 126, 234, 0.5); }
+        }
+
+        .status {
+            text-align: center;
+            padding: 10px;
+            font-size: 12px;
+            color: #9090a0;
+        }
+
+        .relevant-docs {
+            background: #1a2332;
+            border: 1px solid #2196f3;
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+
+        .relevant-docs-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #64b5f6;
+        }
+
+        .doc-item {
+            background: #2d3748;
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border-left: 3px solid #2196f3;
+            color: #e0e0e0;
+        }
+
+        /* 数据库查询结果样式 */
+        .database-result {
+            background: #1a332e;
+            border: 1px solid #28a745;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 10px;
+            font-size: 13px;
+        }
+
+        .database-result-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #28a745;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .database-result-content {
+            background: #2d4832;
+            padding: 10px;
+            border-radius: 6px;
+            border-left: 3px solid #28a745;
+            color: #e0e0e0;
+            white-space: pre-line;
+            font-family: 'Courier New', monospace;
+            line-height: 1.4;
+        }
+
+        .function-info {
+            background: #332e1a;
+            border: 1px solid #ffc107;
+            border-radius: 6px;
+            padding: 8px;
+            margin-top: 8px;
+            font-size: 11px;
+            color: #ffc107;
+        }
+
+        .function-info-title {
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        /* 问题排队区域样式 */
+        .question-queue {
+            display: none;
+            background: #2d2a1f;
+            border: 1px solid #5a5a2a;
+            border-radius: 10px;
+            padding: 12px;
+            margin: 10px 0;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        .queue-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: bold;
+            color: #d4b106;
+            margin-bottom: 8px;
+        }
+
+        .queue-icon {
+            font-size: 16px;
+            animation: rotate 2s linear infinite;
+        }
+
+        .queue-list {
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        .queue-item {
+            background: #3d3d4d;
+            padding: 8px 12px;
+            margin: 4px 0;
+            border-radius: 6px;
+            border-left: 3px solid #f39c12;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #e0e0e0;
+        }
+
+        .queue-number {
+            background: #f39c12;
+            color: white;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        @keyframes slideDown {
+            from { 
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+            to { 
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* 模态框样式 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            animation: fadeIn 0.3s;
+        }
+
+        .modal-content {
+            background-color: #2d2d3d;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+            animation: slideIn 0.3s;
+            border: 1px solid #4d4d5d;
+            color: #e0e0e0;
+        }
+
+        .modal-header {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #dc3545;
+        }
+
+        .modal-body {
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .modal-footer {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-cancel {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-cancel:hover {
+            background: #545b62;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideIn {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        /* 美化滚动条样式 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 52, 96, 0.3);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #4a9eff 0%, #2196f3 50%, #1976d2 100%);
+            border-radius: 3px;
+            transition: all 0.3s ease;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, #5aa8ff 0%, #42a5f5 50%, #1e88e5 100%);
+            box-shadow: 0 0 8px rgba(74, 158, 255, 0.5);
+        }
+
+        ::-webkit-scrollbar-corner {
+            background: rgba(15, 52, 96, 0.3);
+        }
+
+        /* Firefox滚动条样式 */
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: #4a9eff rgba(15, 52, 96, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 折叠按钮 -->
+        <button class="sidebar-toggle" onclick="toggleSidebar()" id="sidebarToggle">
+            ▶
+        </button>
+        
+        <!-- 侧边栏 -->
+        <div class="sidebar collapsed" id="sidebar">
+            <div class="sidebar-header">
+                知识库管理
+            </div>
+            <div class="sidebar-content">
+                <!-- 添加知识 -->
+                <div class="knowledge-section">
+                    <div class="section-title">添加知识</div>
+                    <div class="add-knowledge">
+                        <input type="text" id="knowledgeSource" placeholder="知识来源（可选）">
+                        <textarea id="knowledgeContent" placeholder="请输入要添加的知识内容..."></textarea>
+                        <button class="btn btn-primary" onclick="addKnowledge()">添加知识</button>
+                    </div>
+                </div>
+
+                <!-- 知识列表 -->
+                <div class="knowledge-section">
+                    <div class="section-title">
+                        知识库列表
+                        <button class="btn btn-secondary" onclick="loadKnowledgeList()" style="float: right; padding: 5px 10px; font-size: 12px;">刷新</button>
+                    </div>
+                    <div class="knowledge-list" id="knowledgeList">
+                        <div class="status">点击刷新加载知识列表</div>
+                    </div>
+                </div>
+
+                <!-- API状态 -->
+                <div class="knowledge-section">
+                    <div class="section-title">系统状态</div>
+                    <button class="btn btn-secondary" onclick="checkHealth()">检查健康状态</button>
+                    <div id="healthStatus" class="status">点击检查系统状态</div>
+                    
+                    <button class="btn btn-secondary" onclick="checkPerformance()" style="margin-top: 10px;">性能统计</button>
+                    <div id="performanceStatus" class="status">点击查看性能统计</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 聊天区域 -->
+        <div class="chat-area">
+            <div class="chat-header">
+                🤖 盛云知识问答小助手
+            </div>
+            <div class="chat-messages" id="chatMessages">
+                <div class="message assistant">
+                    <div class="message-avatar">🤖</div>
+                    <div class="message-content">
+                        您好！我是盛云知识问答小助手。您可以：<br>
+                        • 向我提问，我会基于知识库回答<br>
+                        • 在左侧添加新的知识<br>
+                        • 体验流式对话功能<br><br>
+                        请问有什么可以帮助您的吗？
+                    </div>
+                </div>
+            </div>
+            <div class="chat-input">
+                <!-- 问题排队显示区域 -->
+                <div class="question-queue" id="questionQueue">
+                    <div class="queue-header">
+                        <span class="queue-icon">⏳</span>
+                        <span>问题队列 - 等待处理</span>
+                    </div>
+                    <div class="queue-list" id="queueList">
+                        <!-- 排队的问题将在这里显示 -->
+                    </div>
+                </div>
+
+                <!-- AI思考指示器 -->
+                <div class="typing-indicator" id="typingIndicator">
+                    <div class="typing-content">
+                        <div class="ai-avatar">🤖</div>
+                        <span class="typing-text">盛云小助手正在思考</span>
+                        <div class="typing-dots">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 思考步骤显示 -->
+                <div class="thinking-steps" id="thinkingSteps">
+                    <div class="thinking-header">
+                        <span>🧠</span>
+                        <span>AI思考过程</span>
+                    </div>
+                    <div class="thinking-content" id="thinkingContent">
+                        <span class="thinking-text" id="thinkingText"></span>
+                        <span class="thinking-cursor" id="thinkingCursor"></span>
+                    </div>
+                    <div class="thinking-docs" id="thinkingDocs">
+                        <div class="thinking-docs-title">📚 找到的相关文档:</div>
+                        <div id="docsPreview"></div>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <input type="text" id="messageInput" placeholder="请输入您的问题..." 
+                           onkeypress="if(event.key==='Enter') sendMessage()">
+                    <button class="send-btn" id="sendBtn" onclick="sendMessage()">发送</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 删除确认模态框 -->
+    <div id="deleteModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                ⚠️ 确认删除
+            </div>
+            <div class="modal-body">
+                <p>您确定要删除这条知识吗？</p>
+                <div id="deletePreview" style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin: 10px 0; text-align: left; font-size: 12px; max-height: 100px; overflow-y: auto;">
+                </div>
+                <p style="color: #dc3545; font-size: 14px;">此操作不可撤销！</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger" onclick="confirmDelete()">确认删除</button>
+                <button class="btn btn-cancel" onclick="closeDeleteModal()">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API基础URL - 根据实际情况修改
+        const API_BASE = 'http://localhost:8006/api';
+        
+        // 问题队列管理
+        let questionQueue = [];
+        let isProcessing = false;
+        
+        // 添加问题到队列
+        function addToQueue(question) {
+            questionQueue.push({
+                id: Date.now(),
+                text: question,
+                timestamp: new Date()
+            });
+            updateQueueDisplay();
+        }
+        
+        // 从队列中移除问题
+        function removeFromQueue() {
+            if (questionQueue.length > 0) {
+                questionQueue.shift();
+                updateQueueDisplay();
+            }
+        }
+        
+        // 更新队列显示
+        function updateQueueDisplay() {
+            const queueElement = document.getElementById('questionQueue');
+            const queueList = document.getElementById('queueList');
+            
+            if (questionQueue.length === 0) {
+                queueElement.style.display = 'none';
+                return;
+            }
+            
+            queueElement.style.display = 'block';
+            queueList.innerHTML = '';
+            
+            questionQueue.forEach((item, index) => {
+                const queueItem = document.createElement('div');
+                queueItem.className = 'queue-item';
+                queueItem.innerHTML = `
+                    <div class="queue-number">${index + 1}</div>
+                    <div style="flex: 1;">${item.text.length > 50 ? item.text.substring(0, 50) + '...' : item.text}</div>
+                `;
+                queueList.appendChild(queueItem);
+            });
+        }
+        
+        // 处理队列中的下一个问题
+        async function processNextQuestion() {
+            if (questionQueue.length === 0 || isProcessing) {
+                return;
+            }
+
+            const nextQuestion = questionQueue[0];
+            removeFromQueue();
+
+            // 添加用户消息到聊天界面
+            addMessage('user', nextQuestion.text);
+
+            // 确保思考步骤可见
+            const thinkingSteps = document.getElementById('thinkingSteps');
+            thinkingSteps.style.display = 'block';
+
+            // 处理问题
+            await handleQuestionProcessing(nextQuestion.text);
+
+            // 检查是否还有队列中的问题
+            if (questionQueue.length > 0) {
+                setTimeout(() => processNextQuestion(), 500); // 短暂延迟后处理下一个
+            }
+        }
+        
+        // 切换侧边栏显示/隐藏
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.getElementById('sidebarToggle');
+            
+            if (sidebar.classList.contains('collapsed')) {
+                // 展开侧边栏
+                sidebar.classList.remove('collapsed');
+                toggle.classList.add('expanded');
+                toggle.innerHTML = '◀';
+                toggle.title = '收起知识库管理 (Ctrl+B)';
+            } else {
+                // 收起侧边栏
+                sidebar.classList.add('collapsed');
+                toggle.classList.remove('expanded');
+                toggle.innerHTML = '▶';
+                toggle.title = '展开知识库管理 (Ctrl+B)';
+            }
+        }
+        
+        // 发送消息
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            input.value = '';
+            
+            // 如果正在处理，添加到队列
+            if (isProcessing) {
+                addToQueue(message);
+                return;
+            }
+            
+            // 直接处理第一个问题
+            addMessage('user', message);
+            await handleQuestionProcessing(message);
+        }
+        
+        // 处理问题的核心逻辑
+        async function handleQuestionProcessing(message) {
+            isProcessing = true;
+            
+            // 禁用发送按钮
+            const sendBtn = document.getElementById('sendBtn');
+            sendBtn.disabled = true;
+            
+            // 显示打字指示器和思考步骤
+            const typingIndicator = document.getElementById('typingIndicator');
+            const thinkingSteps = document.getElementById('thinkingSteps');
+            typingIndicator.style.display = 'flex';
+            thinkingSteps.style.display = 'block';
+            
+            // 清空之前的思考内容
+            clearThinkingSteps();
+            
+            // 立即添加一些预设的思考步骤，让用户感觉系统在响应
+            const initialThoughts = [
+                "🚀 正在启动AI助手...",
+                "📥 已接收到您的问题...",
+                "🧠 正在激活思考模块...",
+                "🔍 开始分析问题内容...",
+                "📚 准备搜索知识库..."
+            ];
+            
+            // 逐个添加初始思考步骤，每个间隔400ms
+            initialThoughts.forEach((thought, index) => {
+                setTimeout(() => {
+                    if (!isAnswerStarted) {
+                        addThinkingStep(thought);
+                    }
+                }, index * 400);
+            });
+            
+            try {
+                // 使用流式接口
+                await sendStreamMessage(message);
+            } catch (error) {
+                console.error('发送消息失败:', error);
+                addMessage('assistant', '抱歉，发送消息时出现错误，请稍后重试。');
+            } finally {
+                // 恢复状态
+                isProcessing = false;
+                sendBtn.disabled = false;
+                typingIndicator.style.display = 'none';
+
+                // 延迟隐藏思考步骤，让用户看到完整过程
+                setTimeout(() => {
+                    thinkingSteps.style.display = 'none';
+                    // 在隐藏思考步骤后处理队列中的下一个问题
+                    processNextQuestion();
+                }, 2000);
+            }
+        }
+        
+        // 发送流式消息
+        async function sendStreamMessage(message) {
+            const response = await fetch(`${API_BASE}/knowledge/query-stream`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ question: message })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`网络请求失败: ${response.status} ${response.statusText}`);
+            }
+            
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            
+            let assistantMessage = null;
+            let relevantDocs = [];
+            let buffer = '';
+            
+            console.log('开始接收流式数据...');
+            
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) {
+                        console.log('流式数据接收完成');
+                        break;
+                    }
+                    
+                    // 解码数据块
+                    const chunk = decoder.decode(value, { stream: true });
+                    buffer += chunk;
+                    
+                    // 按行分割处理
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || ''; // 保留最后一个不完整的行
+                    
+                    for (const line of lines) {
+                        const trimmedLine = line.trim();
+                        if (!trimmedLine) continue;
+                        
+                        console.log('接收到数据行:', trimmedLine);
+                        
+                        if (trimmedLine.startsWith('data: ')) {
+                            try {
+                                const jsonStr = trimmedLine.slice(6);
+                                if (jsonStr === '[DONE]') {
+                                    console.log('接收到结束标记');
+                                    break;
+                                }
+                                
+                                const data = JSON.parse(jsonStr);
+                                console.log('解析的数据:', data);
+                                
+                                if (data.type === 'docs') {
+                                    relevantDocs = data.data || [];
+                                    console.log('接收到相关文档:', relevantDocs.length, '个');
+                                    
+                                    // 显示找到的文档
+                                    if (relevantDocs.length > 0) {
+                                        showThinkingDocs(relevantDocs);
+                                    }
+                                } else if (data.type === 'database_result') {
+                                    // 处理数据库查询结果
+                                    if (!assistantMessage) {
+                                        assistantMessage = addMessage('assistant', '');
+                                    }
+                                    addDatabaseResult(assistantMessage, data.data);
+                                } else if (data.type === 'function_info') {
+                                    // 处理函数调用信息
+                                    if (!assistantMessage) {
+                                        assistantMessage = addMessage('assistant', '');
+                                    }
+                                    addFunctionInfo(assistantMessage, data.data);
+                                } else if (data.type === 'thinking') {
+                                    // 处理思考步骤
+                                    addThinkingStep(data.data);
+                                } else if (data.type === 'token') {
+                                    // 开始回答时，不要立即停止思考步骤
+                                    if (!assistantMessage) {
+                                        console.log('收到第一个token，开始显示答案');
+                                        assistantMessage = addMessage('assistant', '');
+                                        console.log('创建了新的助手消息');
+                                    }
+                                    appendToMessage(assistantMessage, data.data);
+                                } else if (data.type === 'end') {
+                                    console.log('接收到结束信号，快速完成思考步骤');
+                                    // 流式输出结束时，快速完成所有思考步骤
+                                    finishAllThinking();
+                                    if (assistantMessage && relevantDocs.length > 0) {
+                                        addRelevantDocs(assistantMessage, relevantDocs);
+                                    }
+                                } else if (data.type === 'error') {
+                                    console.error('接收到错误:', data.data);
+                                    if (!assistantMessage) {
+                                        assistantMessage = addMessage('assistant', '❌ ' + data.data);
+                                    } else {
+                                        appendToMessage(assistantMessage, '\n❌ ' + data.data);
+                                    }
+                                }
+                            } catch (e) {
+                                console.error('解析JSON失败:', e, '原始数据:', trimmedLine);
+                            }
+                        }
+                    }
+                }
+                
+                // 处理剩余的缓冲区数据
+                if (buffer.trim()) {
+                    console.log('处理剩余缓冲区数据:', buffer);
+                }
+                
+                // 如果没有创建消息但有相关文档，创建一个消息
+                if (!assistantMessage && relevantDocs.length > 0) {
+                    assistantMessage = addMessage('assistant', '基于知识库找到了相关信息：');
+                    addRelevantDocs(assistantMessage, relevantDocs);
+                }
+                
+                // 如果完全没有消息，显示默认消息
+                if (!assistantMessage) {
+                    console.log('没有接收到任何有效数据，显示默认消息');
+                    addMessage('assistant', '抱歉，没有接收到有效的回答数据。请稍后重试。');
+                }
+                
+            } catch (error) {
+                console.error('流式数据处理错误:', error);
+                if (!assistantMessage) {
+                    addMessage('assistant', '处理回答时出现错误：' + error.message);
+                }
+            }
+        }
+        
+        // 添加消息到聊天界面
+        function addMessage(sender, content) {
+            const messagesContainer = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            
+            const avatar = sender === 'user' ? '👤' : '🤖';
+            
+            messageDiv.innerHTML = `
+                <div class="message-avatar">${avatar}</div>
+                <div class="message-content">${content}</div>
+            `;
+            
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            
+            return messageDiv.querySelector('.message-content');
+        }
+        
+        // 向消息追加内容（用于流式显示）
+        function appendToMessage(messageElement, content) {
+            // 使用innerHTML而不是textContent来保持格式
+            const currentText = messageElement.textContent || '';
+            messageElement.textContent = currentText + content;
+            
+            // 自动滚动到底部
+            const messagesContainer = document.getElementById('chatMessages');
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            
+            console.log('追加内容:', content, '当前总长度:', messageElement.textContent.length);
+        }
+        
+        // 添加相关文档显示
+        function addRelevantDocs(messageElement, docs) {
+            if (docs.length === 0) return;
+            
+            const docsDiv = document.createElement('div');
+            docsDiv.className = 'relevant-docs';
+            
+            let docsHtml = '<div class="relevant-docs-title">📚 相关知识文档:</div>';
+            docs.forEach((doc, index) => {
+                const similarity = (doc.similarity * 100).toFixed(1);
+                docsHtml += `
+                    <div class="doc-item">
+                        <strong>文档 ${index + 1}</strong> (相似度: ${similarity}%)<br>
+                        <small>来源: ${doc.source || '未知'}</small><br>
+                        ${doc.content.substring(0, 100)}${doc.content.length > 100 ? '...' : ''}
+                    </div>
+                `;
+            });
+            
+            docsDiv.innerHTML = docsHtml;
+            messageElement.appendChild(docsDiv);
+        }
+        
+        // 添加数据库查询结果显示
+        function addDatabaseResult(messageElement, result) {
+            const resultDiv = document.createElement('div');
+            resultDiv.className = 'database-result';
+            
+            let resultHtml = '<div class="database-result-title">🗄️ 数据库查询结果</div>';
+            
+            if (result.success) {
+                resultHtml += `
+                    <div class="database-result-content">${result.formatted_data || '查询完成'}</div>
+                `;
+                
+                if (result.function_name) {
+                    resultHtml += `
+                        <div class="function-info">
+                            <div class="function-info-title">📊 查询详情</div>
+                            函数: ${result.function_name}<br>
+                            参数: ${JSON.stringify(result.parameters || {})}<br>
+                            记录数: ${result.count || 0} 条
+                        </div>
+                    `;
+                }
+            } else {
+                resultHtml += `
+                    <div class="database-result-content" style="color: #dc3545;">
+                        ❌ 查询失败: ${result.error || '未知错误'}
+                    </div>
+                `;
+            }
+            
+            resultDiv.innerHTML = resultHtml;
+            messageElement.appendChild(resultDiv);
+        }
+        
+        // 添加函数调用信息显示
+        function addFunctionInfo(messageElement, info) {
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'function-info';
+            
+            let infoHtml = '<div class="function-info-title">🔧 函数调用信息</div>';
+            
+            if (info.function_name) {
+                infoHtml += `函数: ${info.function_name}<br>`;
+            }
+            
+            if (info.parameters) {
+                infoHtml += `参数: ${JSON.stringify(info.parameters)}<br>`;
+            }
+            
+            if (info.status) {
+                infoHtml += `状态: ${info.status}<br>`;
+            }
+            
+            if (info.message) {
+                infoHtml += `信息: ${info.message}`;
+            }
+            
+            infoDiv.innerHTML = infoHtml;
+            messageElement.appendChild(infoDiv);
+        }
+        
+        // 思考步骤相关变量
+        let thinkingQueue = [];
+        let isTyping = false;
+        let currentTypingTimeout = null;
+        let isAnswerStarted = false;
+        
+        // 清空思考步骤
+        function clearThinkingSteps() {
+            const thinkingText = document.getElementById('thinkingText');
+            const thinkingDocs = document.getElementById('thinkingDocs');
+            const docsPreview = document.getElementById('docsPreview');
+            
+            thinkingText.textContent = '';
+            thinkingDocs.style.display = 'none';
+            docsPreview.innerHTML = '';
+            
+            // 清空队列和状态
+            thinkingQueue = [];
+            isTyping = false;
+            isAnswerStarted = false;
+            if (currentTypingTimeout) {
+                clearTimeout(currentTypingTimeout);
+                currentTypingTimeout = null;
+            }
+        }
+        
+        // 添加思考步骤到队列
+        function addThinkingStep(stepText) {
+            console.log('添加思考步骤到队列:', stepText);
+            thinkingQueue.push(stepText);
+            
+            // 如果当前没有在打字，开始处理队列
+            if (!isTyping && !isAnswerStarted) {
+                processThinkingQueue();
+            }
+        }
+        
+        // 处理思考步骤队列
+        function processThinkingQueue() {
+            if (isAnswerStarted) {
+                isTyping = false;
+                return;
+            }
+
+            if (thinkingQueue.length === 0) {
+                // 如果队列空了但答案还没结束，添加一些持续的思考内容
+                isTyping = false;
+                setTimeout(() => {
+                    if (!isAnswerStarted && !isTyping) {
+                        const continuousThoughts = [
+                            "💭 继续深入分析中...",
+                            "🔄 正在整理思路...",
+                            "📊 分析数据关联性...",
+                            "🎯 寻找最佳答案...",
+                            "⚡ 优化回答质量...",
+                            "🔍 验证信息准确性...",
+                            "📝 组织语言表达...",
+                            "🤖 盛云小助手正在深度思考...",
+                            "🧠 智能分析进行中...",
+                            "⚡ 正在整合信息...",
+                            "🎯 构建最佳答案..."
+                        ];
+                        const randomThought = continuousThoughts[Math.floor(Math.random() * continuousThoughts.length)];
+                        console.log('添加持续思考内容:', randomThought);
+                        addThinkingStep(randomThought);
+
+                        // 如果仍然没有开始回答，再次调用自己以持续添加思考内容
+                        setTimeout(() => {
+                            if (!isAnswerStarted) {
+                                processThinkingQueue();
+                            }
+                        }, 3000);
+                    }
+                }, 1500); // 缩短延迟时间，让思考内容更连续
+                return;
+            }
+
+            isTyping = true;
+            const nextStep = thinkingQueue.shift();
+            typewriterEffect(nextStep, () => {
+                // 当前步骤完成后，等待一下再处理下一个
+                isTyping = false; // 重置打字状态
+                setTimeout(() => {
+                    if (!isAnswerStarted) { // 再次检查是否开始回答
+                        processThinkingQueue();
+                    }
+                }, 300);
+            });
+        }
+        
+        // 打字机效果
+        function typewriterEffect(text, callback) {
+            const thinkingText = document.getElementById('thinkingText');
+            const maxLength = 80; // 最大显示长度
+            
+            let currentText = thinkingText.textContent;
+            let displayText = ' ' + text; // 在新文本前加空格分隔
+            let charIndex = 0;
+            
+            function typeNextChar() {
+                // 改进的条件判断，确保打字机效果在各种情况下都能正常工作
+                if (charIndex < displayText.length) {
+                    // 逐个字符添加
+                    const newChar = displayText[charIndex];
+                    currentText += newChar;
+
+                    // 如果超过最大长度，从前面删除字符
+                    if (currentText.length > maxLength) {
+                        // 找到第一个空格或emoji，从那里开始删除
+                        let deleteIndex = 1;
+                        while (deleteIndex < currentText.length &&
+                               currentText[deleteIndex] !== ' ' &&
+                               !isEmojiOrSpecialChar(currentText[deleteIndex])) {
+                            deleteIndex++;
+                        }
+                        currentText = currentText.substring(deleteIndex);
+                    }
+
+                    thinkingText.textContent = currentText;
+                    charIndex++;
+
+                    // 随机打字速度，模拟真实打字
+                    const delay = Math.random() * 100 + 60; // 60-160ms，更慢一点能看清每个字
+                    currentTypingTimeout = setTimeout(typeNextChar, delay);
+                } else {
+                    // 当前步骤打完了
+                    isTyping = false;
+                    if (callback) callback();
+                }
+            }
+            
+            // 检查是否是emoji或特殊字符
+            function isEmojiOrSpecialChar(char) {
+                const code = char.charCodeAt(0);
+                return code > 127; // 简单判断非ASCII字符
+            }
+            
+            // 开始打字
+            typeNextChar();
+        }
+        
+        // 快速完成所有思考步骤
+        function finishAllThinking() {
+            // 延迟设置isAnswerStarted，给打字机效果时间完成当前步骤
+            if (currentTypingTimeout) {
+                clearTimeout(currentTypingTimeout);
+                currentTypingTimeout = null;
+            }
+
+            // 快速显示所有剩余的思考步骤
+            const thinkingText = document.getElementById('thinkingText');
+            let finalText = thinkingText.textContent;
+
+            // 如果还有队列中的步骤，快速添加
+            if (thinkingQueue.length > 0) {
+                const remainingSteps = thinkingQueue.join(' → ');
+                finalText += ' → ' + remainingSteps;
+
+                // 如果文本太长，只保留最后部分
+                const maxLength = 80;
+                if (finalText.length > maxLength) {
+                    finalText = '...' + finalText.substring(finalText.length - maxLength + 3);
+                }
+
+                thinkingText.textContent = finalText;
+            }
+
+            thinkingQueue = [];
+            isTyping = false;
+
+            // 延迟1秒后再设置isAnswerStarted，给当前打字效果时间完成
+            setTimeout(() => {
+                isAnswerStarted = true;
+            }, 1000);
+
+            console.log('快速完成所有思考步骤');
+        }
+        
+        // 显示思考过程中找到的文档
+        function showThinkingDocs(docs) {
+            const thinkingDocs = document.getElementById('thinkingDocs');
+            const docsPreview = document.getElementById('docsPreview');
+            
+            thinkingDocs.style.display = 'block';
+            docsPreview.innerHTML = '';
+            
+            // 逐个显示文档，带有延迟效果
+            docs.forEach((doc, index) => {
+                setTimeout(() => {
+                    const docDiv = document.createElement('div');
+                    docDiv.className = 'doc-preview';
+                    
+                    const similarity = (doc.similarity * 100).toFixed(1);
+                    const preview = doc.content.length > 60 ? 
+                        doc.content.substring(0, 60) + '...' : 
+                        doc.content;
+                    
+                    docDiv.innerHTML = `
+                        <strong>文档${index + 1}</strong> (相似度: ${similarity}%) 
+                        <br><small>${preview}</small>
+                    `;
+                    
+                    docsPreview.appendChild(docDiv);
+                    
+                    // 添加淡入效果
+                    docDiv.style.opacity = '0';
+                    docDiv.style.transform = 'translateY(10px)';
+                    setTimeout(() => {
+                        docDiv.style.transition = 'all 0.3s ease';
+                        docDiv.style.opacity = '1';
+                        docDiv.style.transform = 'translateY(0)';
+                    }, 50);
+                }, index * 300); // 每个文档延迟300ms显示
+            });
+        }
+        
+        // 添加知识
+        async function addKnowledge() {
+            const content = document.getElementById('knowledgeContent').value.trim();
+            const source = document.getElementById('knowledgeSource').value.trim();
+            
+            if (!content) {
+                alert('请输入知识内容');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/knowledge/add`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        content: content,
+                        source: source || '用户添加'
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('知识添加成功！');
+                    document.getElementById('knowledgeContent').value = '';
+                    document.getElementById('knowledgeSource').value = '';
+                    loadKnowledgeList(); // 刷新知识列表
+                } else {
+                    alert('添加失败: ' + result.message);
+                }
+            } catch (error) {
+                alert('添加失败: ' + error.message);
+            }
+        }
+        
+        // 加载知识列表
+        async function loadKnowledgeList() {
+            const listContainer = document.getElementById('knowledgeList');
+            listContainer.innerHTML = '<div class="status">加载中...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/knowledge/list?limit=20&offset=0`);
+                const result = await response.json();
+                
+                if (result.success && result.data.length > 0) {
+                    let html = '';
+                    result.data.forEach(item => {
+                        html += `
+                            <div class="knowledge-item" data-id="${item.id}">
+                                <button class="delete-btn" onclick="showDeleteModal('${item.id}', '${item.content.replace(/'/g, "\\'")}', '${item.source || '未知'}')">×</button>
+                                <strong>来源:</strong> ${item.source || '未知'}<br>
+                                <strong>内容:</strong> ${item.content}<br>
+                                <small>添加时间: ${new Date(item.created_at).toLocaleString()}</small>
+                            </div>
+                        `;
+                    });
+                    listContainer.innerHTML = html;
+                } else {
+                    listContainer.innerHTML = '<div class="status">暂无知识条目</div>';
+                }
+            } catch (error) {
+                listContainer.innerHTML = '<div class="status">加载失败: ' + error.message + '</div>';
+            }
+        }
+        
+        // 检查健康状态
+        async function checkHealth() {
+            const statusDiv = document.getElementById('healthStatus');
+            statusDiv.textContent = '检查中...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/knowledge/health`);
+                const result = await response.json();
+                
+                if (result.status === 'healthy') {
+                    statusDiv.innerHTML = '✅ 系统运行正常';
+                    statusDiv.style.color = '#28a745';
+                } else {
+                    statusDiv.innerHTML = '⚠️ 系统异常';
+                    statusDiv.style.color = '#dc3545';
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '❌ 连接失败';
+                statusDiv.style.color = '#dc3545';
+            }
+        }
+        
+        // 检查性能统计
+        async function checkPerformance() {
+            const statusDiv = document.getElementById('performanceStatus');
+            statusDiv.textContent = '检查中...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/knowledge/performance`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    const data = result.data;
+                    const colorMap = {
+                        'green': '#28a745',
+                        'blue': '#007bff', 
+                        'orange': '#fd7e14',
+                        'red': '#dc3545',
+                        'gray': '#6c757d'
+                    };
+                    
+                    statusDiv.innerHTML = `
+                        📊 知识库: ${data.knowledge_count} 条<br>
+                        ⚡ 性能: ${data.performance_level}<br>
+                        ⏱️ 预计响应: ${data.estimated_response_time}<br>
+                        💾 数据库: ${data.database_size_mb} MB
+                    `;
+                    statusDiv.style.color = colorMap[data.performance_color] || '#6c757d';
+                    
+                    // 显示建议
+                    if (data.recommendations && data.recommendations.length > 0) {
+                        statusDiv.innerHTML += '<br><small>💡 ' + data.recommendations[0] + '</small>';
+                    }
+                } else {
+                    statusDiv.innerHTML = '⚠️ 获取统计失败';
+                    statusDiv.style.color = '#dc3545';
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '❌ 连接失败';
+                statusDiv.style.color = '#dc3545';
+            }
+        }
+        
+        // 删除相关的全局变量
+        let deleteKnowledgeId = null;
+        
+        // 显示删除确认模态框
+        function showDeleteModal(id, content, source) {
+            deleteKnowledgeId = id;
+            
+            // 显示知识预览
+            const previewDiv = document.getElementById('deletePreview');
+            previewDiv.innerHTML = `
+                <strong>来源:</strong> ${source}<br>
+                <strong>内容:</strong> ${content.length > 100 ? content.substring(0, 100) + '...' : content}
+            `;
+            
+            // 显示模态框
+            const modal = document.getElementById('deleteModal');
+            modal.style.display = 'block';
+        }
+        
+        // 关闭删除确认模态框
+        function closeDeleteModal() {
+            const modal = document.getElementById('deleteModal');
+            modal.style.display = 'none';
+            deleteKnowledgeId = null;
+        }
+        
+        // 确认删除知识
+        async function confirmDelete() {
+            if (!deleteKnowledgeId) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/knowledge/delete/${deleteKnowledgeId}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // 删除成功，关闭模态框并刷新列表
+                    closeDeleteModal();
+                    loadKnowledgeList();
+                    
+                    // 显示成功消息
+                    addMessage('assistant', '✅ 知识删除成功！');
+                } else {
+                    alert('删除失败: ' + result.message);
+                }
+            } catch (error) {
+                alert('删除失败: ' + error.message);
+            }
+        }
+        
+        // 点击模态框背景关闭
+        window.onclick = function(event) {
+            const modal = document.getElementById('deleteModal');
+            if (event.target === modal) {
+                closeDeleteModal();
+            }
+        }
+        
+        // 键盘快捷键支持
+        document.addEventListener('keydown', function(event) {
+            // Ctrl + B 切换侧边栏
+            if (event.ctrlKey && event.key === 'b') {
+                event.preventDefault();
+                toggleSidebar();
+            }
+        });
+        
+        // 页面加载时检查系统状态
+        window.onload = function() {
+            // 设置初始状态
+            const toggle = document.getElementById('sidebarToggle');
+            toggle.innerHTML = '▶';
+            toggle.title = '展开知识库管理 (Ctrl+B)';
+            
+            checkHealth();
+            loadKnowledgeList();
+        };
+    </script>
+</body>
+</html>

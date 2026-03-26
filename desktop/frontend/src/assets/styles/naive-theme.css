@@ -1,0 +1,373 @@
+/* Naive UI 全局深色主题样式 */
+
+/* 数据表格样式 */
+.n-data-table {
+  --n-th-color: rgba(102, 126, 234, 0.3) !important;
+  --n-td-color: rgba(15, 20, 40, 0.5) !important;
+  --n-td-color-striped: rgba(102, 126, 234, 0.05) !important;
+  --n-td-color-hover: rgba(102, 126, 234, 0.15) !important;
+  --n-border-color: rgba(255, 255, 255, 0.1) !important;
+  --n-th-text-color: #ffffff !important;
+  --n-td-text-color: rgba(255, 255, 255, 0.9) !important;
+  --n-th-font-weight: 600 !important;
+  background: transparent !important;
+}
+
+.n-data-table-th {
+  background: rgba(102, 126, 234, 0.3) !important;
+  border-bottom: 2px solid rgba(102, 126, 234, 0.5) !important;
+}
+
+.n-data-table-td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.n-data-table-tr:hover .n-data-table-td {
+  background: rgba(102, 126, 234, 0.15) !important;
+}
+
+.n-data-table tbody .n-data-table-tr:hover {
+  background: rgba(102, 126, 234, 0.15) !important;
+}
+
+/* 输入框样式 */
+.n-input,
+.n-input__input-el,
+.n-input__textarea-el {
+  --n-color: rgba(0, 0, 0, 0.5) !important;
+  --n-color-focus: rgba(0, 0, 0, 0.6) !important;
+  --n-border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  --n-border-hover: 1px solid rgba(102, 126, 234, 0.6) !important;
+  --n-border-focus: 1px solid #667eea !important;
+  --n-text-color: #ffffff !important;
+  --n-placeholder-color: rgba(255, 255, 255, 0.4) !important;
+  --n-caret-color: #667eea !important;
+  background: rgba(0, 0, 0, 0.5) !important;
+}
+
+.n-input--focus {
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2) !important;
+}
+
+.n-input .n-input__input-el {
+  color: #ffffff !important;
+}
+
+/* 数字输入框 */
+.n-input-number {
+  --n-color: rgba(0, 0, 0, 0.5) !important;
+  --n-border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  --n-border-hover: 1px solid rgba(102, 126, 234, 0.6) !important;
+  --n-border-focus: 1px solid #667eea !important;
+  --n-text-color: #ffffff !important;
+  --n-icon-color: rgba(255, 255, 255, 0.6) !important;
+  --n-icon-color-hover: #667eea !important;
+  background: rgba(0, 0, 0, 0.5) !important;
+}
+
+.n-input-number .n-input__input-el {
+  color: #ffffff !important;
+}
+
+/* 选择器 */
+.n-select {
+  --n-color: rgba(0, 0, 0, 0.5) !important;
+  --n-border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  --n-border-hover: 1px solid rgba(102, 126, 234, 0.6) !important;
+  --n-border-focus: 1px solid #667eea !important;
+  --n-text-color: #ffffff !important;
+  --n-placeholder-color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.n-base-selection {
+  --n-color: rgba(0, 0, 0, 0.5) !important;
+  --n-border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  --n-border-hover: 1px solid rgba(102, 126, 234, 0.6) !important;
+  --n-border-active: 1px solid #667eea !important;
+  --n-text-color: #ffffff !important;
+  background: rgba(0, 0, 0, 0.5) !important;
+}
+
+.n-base-selection .n-base-selection-label {
+  color: #ffffff !important;
+}
+
+/* 下拉菜单 */
+.n-base-select-menu,
+.n-select-menu {
+  background: rgba(20, 30, 48, 0.95) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+.n-base-select-option {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.n-base-select-option:hover,
+.n-base-select-option--pending {
+  background: rgba(102, 126, 234, 0.2) !important;
+}
+
+.n-base-select-option--selected {
+  background: rgba(102, 126, 234, 0.3) !important;
+  color: #ffffff !important;
+}
+
+/* 按钮 - 工业低调配色 */
+.n-button {
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.n-button--primary-type {
+  background: linear-gradient(135deg, #546e7a 0%, #607d8b 100%) !important;
+  border: none !important;
+}
+
+.n-button--primary-type:hover:not(.n-button--disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(84, 110, 122, 0.4) !important;
+  background: linear-gradient(135deg, #607d8b 0%, #78909c 100%) !important;
+}
+
+.n-button--success-type {
+  background: linear-gradient(135deg, #4a6b60 0%, #5e8b7e 100%) !important;
+  border: none !important;
+}
+
+.n-button--success-type:hover:not(.n-button--disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(74, 107, 96, 0.4) !important;
+  background: linear-gradient(135deg, #5e8b7e 0%, #72a092 100%) !important;
+}
+
+.n-button--error-type {
+  background: linear-gradient(135deg, #7a5858 0%, #8e6e6e 100%) !important;
+  border: none !important;
+}
+
+.n-button--error-type:hover:not(.n-button--disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(122, 88, 88, 0.4) !important;
+  background: linear-gradient(135deg, #8e6e6e 0%, #a28282 100%) !important;
+}
+
+.n-button--warning-type {
+  background: linear-gradient(135deg, #7a6550 0%, #9e7e5e 100%) !important;
+  border: none !important;
+}
+
+.n-button--warning-type:hover:not(.n-button--disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(122, 101, 80, 0.4) !important;
+  background: linear-gradient(135deg, #9e7e5e 0%, #b8967e 100%) !important;
+}
+
+.n-button--info-type {
+  background: linear-gradient(135deg, #5a7080 0%, #6e8e9e 100%) !important;
+  border: none !important;
+}
+
+.n-button--info-type:hover:not(.n-button--disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(90, 112, 128, 0.4) !important;
+  background: linear-gradient(135deg, #6e8e9e 0%, #82a8b8 100%) !important;
+}
+
+.n-button--default-type {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.n-button--default-type:hover:not(.n-button--disabled) {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(120, 144, 156, 0.4) !important;
+  transform: translateY(-2px);
+}
+
+/* 通用action-btn样式（用于自定义按钮） */
+.action-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.action-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-btn.primary {
+  background: linear-gradient(135deg, #546e7a 0%, #607d8b 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(84, 110, 122, 0.3);
+}
+
+.action-btn.primary:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(84, 110, 122, 0.4);
+  background: linear-gradient(135deg, #607d8b 0%, #78909c 100%);
+}
+
+.action-btn.success {
+  background: linear-gradient(135deg, #4a6b60 0%, #5e8b7e 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(74, 107, 96, 0.3);
+}
+
+.action-btn.success:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(74, 107, 96, 0.4);
+  background: linear-gradient(135deg, #5e8b7e 0%, #72a092 100%);
+}
+
+.action-btn.warning {
+  background: linear-gradient(135deg, #7a6550 0%, #9e7e5e 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(122, 101, 80, 0.3);
+}
+
+.action-btn.warning:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(122, 101, 80, 0.4);
+  background: linear-gradient(135deg, #9e7e5e 0%, #b8967e 100%);
+}
+
+.action-btn.danger {
+  background: linear-gradient(135deg, #7a5858 0%, #8e6e6e 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(122, 88, 88, 0.3);
+}
+
+.action-btn.danger:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(122, 88, 88, 0.4);
+  background: linear-gradient(135deg, #8e6e6e 0%, #a28282 100%);
+}
+
+.action-btn.info {
+  background: linear-gradient(135deg, #5a7080 0%, #6e8e9e 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(90, 112, 128, 0.3);
+}
+
+.action-btn.info:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(90, 112, 128, 0.4);
+  background: linear-gradient(135deg, #6e8e9e 0%, #82a8b8 100%);
+}
+
+.action-btn.secondary {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.action-btn.secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(120, 144, 156, 0.4);
+}
+
+.action-btn.refresh {
+  background: linear-gradient(135deg, #546e7a 0%, #78909c 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(84, 110, 122, 0.3);
+}
+
+.action-btn.refresh:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(84, 110, 122, 0.4);
+  background: linear-gradient(135deg, #607d8b 0%, #8ca0ac 100%);
+}
+
+/* 开关 */
+.n-switch {
+  --n-rail-color: rgba(255, 255, 255, 0.2) !important;
+  --n-rail-color-active: #667eea !important;
+}
+
+/* 复选框 */
+.n-checkbox {
+  --n-border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  --n-border-checked: 1px solid #667eea !important;
+  --n-color-checked: #667eea !important;
+  --n-label-text-color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* 标签 */
+.n-tag {
+  --n-color: rgba(102, 126, 234, 0.2) !important;
+  --n-text-color: #ffffff !important;
+  --n-border: 1px solid rgba(102, 126, 234, 0.3) !important;
+}
+
+.n-tag--warning-type {
+  --n-color: rgba(255, 193, 7, 0.2) !important;
+  --n-text-color: #ffc107 !important;
+  --n-border: 1px solid rgba(255, 193, 7, 0.4) !important;
+}
+
+/* 日期选择器 */
+.n-date-picker {
+  --n-item-color: rgba(0, 0, 0, 0.4) !important;
+  --n-item-text-color: #ffffff !important;
+}
+
+.n-date-panel,
+.n-date-panel-calendar {
+  background: rgba(20, 30, 48, 0.95) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+.n-date-panel-date__day,
+.n-date-panel-month__month,
+.n-date-panel-year__year {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.n-date-panel-date__day:hover,
+.n-date-panel-month__month:hover,
+.n-date-panel-year__year:hover {
+  background: rgba(102, 126, 234, 0.2) !important;
+}
+
+.n-date-panel-date__day--selected,
+.n-date-panel-month__month--selected,
+.n-date-panel-year__year--selected {
+  background: #667eea !important;
+  color: #ffffff !important;
+}
+
+/* 消息提示 */
+.n-message {
+  background: rgba(20, 30, 48, 0.95) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
+}
+
+.n-message--success-type {
+  border-color: rgba(56, 239, 125, 0.4) !important;
+}
+
+.n-message--error-type {
+  border-color: rgba(231, 76, 60, 0.4) !important;
+}
+
+.n-message--warning-type {
+  border-color: rgba(255, 193, 7, 0.4) !important;
+}
+
+/* 空间组件 */
+.n-space {
+  flex-wrap: wrap;
+}
+

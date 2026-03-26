@@ -1,0 +1,134 @@
+/* ===================================
+   通用按钮样式 - 工业低调色系
+   =================================== */
+
+.action-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.action-btn:active {
+  transform: translateY(0);
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* 工业低调配色 */
+.action-btn.primary {
+  background: linear-gradient(135deg, #546e7a 0%, #607d8b 100%);
+  color: white;
+}
+
+.action-btn.success {
+  background: linear-gradient(135deg, #4a6b60 0%, #5e8b7e 100%);
+  color: white;
+}
+
+.action-btn.warning {
+  background: linear-gradient(135deg, #7a6550 0%, #9e7e5e 100%);
+  color: white;
+}
+
+.action-btn.danger {
+  background: linear-gradient(135deg, #7a5858 0%, #8e6e6e 100%);
+  color: white;
+}
+
+.action-btn.info {
+  background: linear-gradient(135deg, #5a7080 0%, #6e8e9e 100%);
+  color: white;
+}
+
+.action-btn.secondary {
+  background: rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.9);
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.action-btn.refresh {
+  background: linear-gradient(135deg, #546e7a 0%, #78909c 100%);
+  color: white;
+}
+
+/* 表格按钮（小尺寸） */
+.table-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 2px;
+  font-size: 13px;
+}
+
+.table-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.table-btn:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.table-btn.edit {
+  background: linear-gradient(135deg, #546e7a 0%, #607d8b 100%);
+  color: white;
+}
+
+.table-btn.delete {
+  background: linear-gradient(135deg, #7a5858 0%, #8e6e6e 100%);
+  color: white;
+}
+
+.table-btn.view {
+  background: linear-gradient(135deg, #5a7080 0%, #6e8e9e 100%);
+  color: white;
+}
+
+.table-btn.success {
+  background: linear-gradient(135deg, #4a6b60 0%, #5e8b7e 100%);
+  color: white;
+}
+
+/* Badge徽章 */
+.badge-count {
+  background: rgba(142, 110, 110, 0.8);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: bold;
+  margin-left: 4px;
+}
+
+.badge-mini {
+  background: rgba(255,255,255,0.2);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  margin-left: 4px;
+}
+

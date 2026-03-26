@@ -1,0 +1,907 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>QA 助手（纯 HTML/JS）</title>
+  <style>
+    :root {
+      --bg:#0b1220;
+      --panel:rgba(20,28,48,0.35);
+      --glass:rgba(255,255,255,0.08);
+      --stroke:rgba(255,255,255,0.15);
+      --text:#e7eefb;
+      --sub:#98a2b3;
+      --accent:#3dd9ff;
+      --accent2:#ff7a6b;
+      --good:#27e2a4;
+      --warn:#ffd166;
+      --bad:#ff5d5d;
+      --blue:#4da3ff;
+      --purple:#a78bfa;
+      --b1:rgba(255,255,255,0.15);
+      --card:rgba(20,28,48,0.35);
+      --muted:#98a2b3;
+      --muted2:#98a2b3;
+      --blue1:#4da3ff;
+      --blue2:#3dd9ff;
+      --green1:#27e2a4;
+      --green2:#1ba673;
+      --amber1:#ffd166;
+      --amber2:#fef9c3;
+      --amber3:#fefce8;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:'Inter','Helvetica Neue','Arial','sans-serif';
+      background:
+        radial-gradient(1500px 1000px at 15% -15%, rgba(61,217,255,0.12), transparent 50%),
+        radial-gradient(2000px 1400px at 85% 115%, rgba(61,217,255,0.25), rgba(77,163,255,0.15), transparent 40%),
+        radial-gradient(1200px 900px at 95% 105%, rgba(167,139,250,0.12), transparent 60%),
+        var(--bg);
+      color:var(--text);
+      min-height:100vh;
+      overflow-x:hidden;
+    }
+
+    .qa-assistant-container{width:100%;height:100%;display:flex;gap:24px;padding:24px}
+    .panel{
+      background:linear-gradient(180deg, var(--panel), rgba(255,255,255,0.02));
+      border:1px solid var(--stroke);
+      border-radius:16px;
+      overflow:hidden;
+      -webkit-backdrop-filter: blur(12px) saturate(1.2);
+      backdrop-filter: blur(12px) saturate(1.2);
+      box-shadow:
+        0 8px 32px rgba(61,217,255,0.08),
+        inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+
+    /* 左侧：知识库 */
+    .knowledge-panel{width:400px;flex-shrink:0;display:flex;flex-direction:column}
+    .panel-header{
+      padding:20px 24px;
+      border-bottom:1px solid var(--stroke);
+      background:rgba(61,217,255,0.1);
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+    }
+    .panel-title{
+      margin:0;
+      font-size:18px;
+      font-weight:700;
+      background:linear-gradient(90deg,var(--accent),#9be2ff);
+      -webkit-background-clip:text;
+      background-clip:text;
+      color:transparent;
+      text-shadow: 0 0 12px rgba(61,217,255,0.25);
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .btn{
+      appearance:none;
+      border:0;
+      border-radius:10px;
+      padding:8px 16px;
+      font-weight:600;
+      cursor:pointer;
+      transition: all 0.3s ease;
+      color:white;
+      text-shadow:0 1px 2px rgba(0,0,0,0.3);
+    }
+    .btn-primary{
+      background:linear-gradient(135deg, var(--blue), var(--accent));
+      box-shadow:0 4px 12px rgba(61,217,255,0.3);
+    }
+    .btn-primary:hover{
+      transform:translateY(-1px);
+      box-shadow:0 6px 20px rgba(61,217,255,0.4);
+    }
+    .btn-ghost{
+      background:rgba(0,0,0,.15);
+      border:1px solid var(--stroke);
+      color:var(--text);
+    }
+    .btn-ghost:hover{
+      background:rgba(61,217,255,0.1);
+      border-color:var(--accent);
+    }
+    .btn-icon{width:40px;height:40px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center}
+
+    .knowledge-stats{
+      padding:16px 24px;
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:16px;
+      background:rgba(61,217,255,0.08);
+      border-bottom:1px solid var(--stroke);
+      -webkit-backdrop-filter: blur(4px);
+      backdrop-filter: blur(4px);
+    }
+    .stat-item{display:flex;flex-direction:column;gap:4px}
+    .stat-label{font-size:12px;color:var(--sub);font-weight:500;text-shadow:0 1px 2px rgba(0,0,0,0.3)}
+    .stat-value{font-size:24px;font-weight:700;color:var(--text);text-shadow:0 2px 4px rgba(0,0,0,0.4)}
+    .level-excellent{color:var(--good)}.level-good{color:var(--accent)}.level-fair{color:var(--warn)}.level-poor{color:var(--bad)}
+
+    .knowledge-list-container{flex:1;overflow:auto;padding:16px}
+    .group{
+      border:1px solid var(--stroke);
+      border-radius:10px;
+      margin-bottom:10px;
+      background:rgba(0,0,0,.15);
+      -webkit-backdrop-filter: blur(4px);
+      backdrop-filter: blur(4px);
+    }
+    .group-head{display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer;color:var(--text);font-weight:600}
+    .group-badge{margin-left:auto;background:linear-gradient(135deg,var(--blue),var(--accent));color:#fff;border-radius:999px;padding:2px 8px;font-size:12px}
+    .group-body{display:none;padding:8px 12px 12px}
+    .group.open .group-body{display:block}
+
+    .knowledge-item{
+      display:flex;
+      gap:12px;
+      padding:12px;
+      background:rgba(0,0,0,.2);
+      border:1px solid var(--stroke);
+      border-radius:8px;
+      margin-top:8px;
+      transition:.3s;
+    }
+    .knowledge-item:hover{
+      background:rgba(61,217,255,0.1);
+      border-color:var(--accent);
+      transform:translateX(4px);
+      box-shadow:0 2px 8px rgba(61,217,255,.15);
+    }
+    .knowledge-text{font-size:13px;line-height:1.6;color:var(--text);margin:0 0 8px;word-break:break-word}
+    .knowledge-date{font-size:11px;color:var(--sub)}
+    .knowledge-actions{display:flex;gap:6px}
+
+    .load-more{text-align:center;padding:16px;border-top:1px solid var(--stroke)}
+
+    /* 右侧：聊天 */
+    .chat-panel{flex:1;display:flex;flex-direction:column}
+    .messages-container{flex:1;overflow:auto;padding:24px;scroll-behavior:smooth}
+
+    .welcome-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;padding:40px}
+    .welcome-icon{color:var(--blue1);margin-bottom:24px;animation:float 3s ease-in-out infinite}
+    @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+    .welcome-title{font-size:32px;font-weight:700;color:var(--text);margin-bottom:12px}
+    .welcome-subtitle{font-size:16px;color:#64748b;margin-bottom:40px}
+    .quick-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;max-width:800px;width:100%}
+    .suggestion-card{display:flex;align-items:center;gap:12px;padding:16px 20px;background:linear-gradient(135deg,#f8fafc 0%,#f1f5f9 100%);border:1px solid var(--b1);border-radius:12px;cursor:pointer;transition:.3s;box-shadow:0 2px 4px rgba(0,0,0,.04)}
+    .suggestion-card:hover{background:linear-gradient(135deg,#eff6ff 0%,#dbeafe 100%);border-color:var(--blue1);transform:translateY(-2px);box-shadow:0 4px 12px rgba(59,130,246,.15)}
+
+    .messages-list{display:flex;flex-direction:column;gap:24px}
+    .message-wrapper{display:flex;gap:12px;animation:msg .4s ease-out}
+    @keyframes msg{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+    .user-message{flex-direction:row-reverse}
+    .message-avatar{flex-shrink:0;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--blue1),var(--blue2));color:#fff;box-shadow:0 4px 12px rgba(59,130,246,.3)}
+    .assistant-message .message-avatar{background:linear-gradient(135deg,var(--green1),var(--green2));box-shadow:0 4px 12px rgba(16,185,129,.3)}
+    .message-content{flex:0 1 auto;max-width:80%;min-width:100px}
+    .message-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+    .message-role{font-size:13px;font-weight:600;color:var(--text)}
+    .message-time{font-size:12px;color:var(--muted2)}
+    .message-text{
+      padding:16px 20px;
+      border-radius:12px;
+      font-size:14px;
+      line-height:1.6;
+      color:var(--text);
+      background:rgba(0,0,0,0.2);
+      border:1px solid var(--stroke);
+      box-shadow:0 2px 8px rgba(0,0,0,.04);
+      width:fit-content;
+      max-width:100%;
+      word-wrap:break-word;
+    }
+    .user-message .message-text{
+      background:linear-gradient(135deg,var(--blue),var(--accent));
+      color:#fff;
+      border:1px solid rgba(61,217,255,0.3);
+      box-shadow:0 4px 12px rgba(61,217,255,.2);
+      margin-left:auto;
+    }
+    .message-text strong{font-weight:600}
+    .message-text code{background:rgba(0,0,0,.15);padding:2px 6px;border-radius:4px;font-family:Consolas,Monaco,monospace;font-size:13px}
+    .user-message .message-text code{background:rgba(255,255,255,.2)}
+
+    .thinking-steps{
+      margin-top:12px;
+      padding:12px 16px;
+      background:rgba(61,217,255,0.08);
+      border:1px solid rgba(61,217,255,0.2);
+      border-radius:8px;
+      font-size:13px;
+      color:var(--accent);
+      -webkit-backdrop-filter: blur(4px);
+      backdrop-filter: blur(4px);
+    }
+    .thinking-step{margin-bottom:6px;display:flex;align-items:center;gap:8px}
+    .thinking-step:last-child{margin-bottom:0}
+
+    .relevant-docs{
+      margin-top:16px;
+      padding:16px;
+      background:rgba(255,209,102,0.08);
+      border:1px solid rgba(255,209,102,0.3);
+      border-radius:12px;
+      box-shadow:0 2px 8px rgba(255,209,102,.1);
+      -webkit-backdrop-filter: blur(4px);
+      backdrop-filter: blur(4px);
+    }
+    .docs-header{display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:13px;font-weight:600;color:var(--warn)}
+    .doc-title{display:flex;align-items:center;gap:8px;width:100%;font-size:13px}
+    .doc-source{flex:1;font-weight:500;color:var(--text)}
+    .similarity-tag{margin-left:auto;font-size:11px;background:rgba(39,226,164,0.2);border-radius:6px;padding:2px 6px;color:var(--good)}
+    details.doc{border:1px solid rgba(255,209,102,0.3);border-radius:8px;background:rgba(0,0,0,0.2);margin-bottom:8px}
+    details.doc summary{list-style:none;padding:12px 16px;cursor:pointer;background:rgba(255,209,102,0.1);border-radius:8px}
+    .doc-content{font-size:13px;line-height:1.8;color:var(--text);white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,0.15);padding:12px;border-radius:6px;border:1px solid var(--stroke);margin:8px}
+
+    .typing-indicator{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:16px 20px;
+      background:rgba(0,0,0,0.2);
+      border:1px solid var(--stroke);
+      border-radius:12px;
+      min-height:56px;
+    }
+    .typing-text{font-size:14px;color:var(--accent);font-weight:500;margin-right:4px}
+    .dot{width:8px;height:8px;background:var(--accent);border-radius:50%;animation:td 1.4s infinite ease-in-out;display:inline-block}
+    .dot:nth-child(2){animation-delay:0s}.dot:nth-child(3){animation-delay:.2s}.dot:nth-child(4){animation-delay:.4s}
+    @keyframes td{0%,60%,100%{transform:translateY(0);opacity:.3}30%{transform:translateY(-10px);opacity:1}}
+
+    .input-container{
+      border-top:1px solid var(--stroke);
+      padding:20px 24px;
+      background:rgba(0,0,0,0.1);
+    }
+    .input-wrapper{display:flex;gap:12px;align-items:flex-end}
+    .input-actions{display:flex;gap:8px}
+    textarea.input{
+      flex:1;
+      border-radius:12px;
+      border:1px solid var(--stroke);
+      background:rgba(0,0,0,0.2);
+      color:var(--text);
+      padding:12px 16px;
+      font-size:14px;
+      resize:none;
+      min-height:42px;
+      max-height:120px;
+    }
+    textarea.input:focus{
+      outline:0;
+      border-color:var(--accent);
+      box-shadow:0 0 0 2px rgba(61,217,255,.2);
+    }
+
+    .tag{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:600}
+    .tag-success{background:rgba(39,226,164,0.2);color:var(--good)}
+
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:50;-webkit-backdrop-filter: blur(4px);backdrop-filter: blur(4px)}
+    .modal.open{display:flex}
+    .modal-card{
+      width:min(600px,92vw);
+      background:linear-gradient(180deg, var(--panel), rgba(255,255,255,0.02));
+      border:1px solid var(--stroke);
+      border-radius:12px;
+      box-shadow:0 20px 60px rgba(0,0,0,.5);
+      overflow:hidden;
+      -webkit-backdrop-filter: blur(12px) saturate(1.2);
+      backdrop-filter: blur(12px) saturate(1.2);
+    }
+    .modal-head{padding:14px 16px;border-bottom:1px solid var(--stroke);font-weight:700;color:var(--text);background:rgba(61,217,255,0.1)}
+    .modal-body{padding:16px}
+    .modal-foot{padding:12px 16px;border-top:1px solid var(--stroke);display:flex;justify-content:flex-end;gap:8px}
+
+    /* 滚动条样式 */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: linear-gradient(135deg, var(--accent), var(--blue));
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(135deg, var(--blue), var(--accent));
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    ::-webkit-scrollbar-corner {
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    @media (max-width:1200px){.qa-assistant-container{flex-direction:column}.knowledge-panel{width:100%;max-height:400px}.chat-panel{height:600px}}
+    @media (max-width:768px){.qa-assistant-container{padding:12px;gap:12px}.knowledge-panel{max-height:300px}.panel-header{padding:16px}.panel-title{font-size:16px}.messages-container{padding:16px}.message-content{max-width:90%}.quick-actions{grid-template-columns:1fr}.welcome-title{font-size:24px}.knowledge-stats{grid-template-columns:1fr}}
+
+    .i{width:1em;height:1em;display:inline-block;vertical-align:-0.15em}
+  </style>
+</head>
+<body>
+<div class="qa-assistant-container">
+  <!-- 左：知识库管理 -->
+  <aside class="knowledge-panel panel">
+    <div class="panel-header">
+      <h3 class="panel-title"><span class="i" aria-hidden>📄</span> 知识库管理</h3>
+      <button id="btnAddKnowledge" class="btn btn-primary">添加知识</button>
+    </div>
+
+    <div class="knowledge-stats">
+      <div class="stat-item">
+        <span class="stat-label">总知识数</span>
+        <span id="statTotal" class="stat-value">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">性能等级</span>
+        <span id="statPerf" class="stat-value level-good">良好</span>
+      </div>
+    </div>
+
+    <div id="knowledgeGroups" class="knowledge-list-container"></div>
+
+    <div class="load-more" id="loadMoreWrap" style="display:none">
+      <button id="btnLoadMore" class="btn btn-ghost">加载更多</button>
+    </div>
+  </aside>
+
+  <!-- 右：聊天助手 -->
+  <section class="chat-panel panel">
+    <div class="panel-header">
+      <h3 class="panel-title"><span class="i" aria-hidden>💬</span> 智能问答助手</h3>
+      <span id="healthTag" class="tag tag-success" style="display:none"><span class="i">✅</span> 服务正常</span>
+    </div>
+
+    <div id="messagesContainer" class="messages-container">
+      <div id="welcome" class="welcome-screen">
+        <div class="welcome-icon" style="font-size:64px">💬</div>
+        <h2 class="welcome-title">问答助手</h2>
+        <p class="welcome-subtitle">您好！我是您的智能助手，有什么可以帮助您的吗？</p>
+        <div id="quickActions" class="quick-actions"></div>
+      </div>
+      <div id="messagesList" class="messages-list" style="display:none"></div>
+    </div>
+
+    <div class="input-container">
+      <div class="input-wrapper">
+        <textarea id="inputMessage" class="input" rows="1" placeholder="输入您的问题..."></textarea>
+        <div class="input-actions">
+          <button id="btnClear" class="btn btn-icon btn-ghost" title="清空对话">🗑️</button>
+          <button id="btnSend" class="btn btn-icon btn-primary" title="发送">📤</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- 添加知识对话框 -->
+<div id="dlgAdd" class="modal" role="dialog" aria-modal="true" aria-labelledby="dlgAddTitle">
+  <div class="modal-card">
+    <div class="modal-head" id="dlgAddTitle">添加知识</div>
+    <div class="modal-body">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <label>知识内容（1-10000 字）
+          <textarea id="addContent" rows="8" maxlength="10000" style="width:100%;"></textarea>
+        </label>
+        <label>来源（可选，≤255 字）
+          <input id="addSource" maxlength="255" style="width:100%" />
+        </label>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button data-close="dlgAdd" class="btn btn-ghost">取消</button>
+      <button id="btnAddConfirm" class="btn btn-primary">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 查看知识对话框 -->
+<div id="dlgView" class="modal" role="dialog" aria-modal="true" aria-labelledby="dlgViewTitle">
+  <div class="modal-card">
+    <div class="modal-head" id="dlgViewTitle">知识详情</div>
+    <div class="modal-body">
+      <div class="knowledge-detail" style="display:flex;flex-direction:column;gap:16px">
+        <div class="detail-item"><span class="detail-label" style="min-width:80px;font-weight:600;color:#475569">来源：</span><span id="viewSource" class="detail-value" style="color:#64748b"></span></div>
+        <div class="detail-item"><span class="detail-label" style="min-width:80px;font-weight:600;color:#475569">创建时间：</span><span id="viewDate" class="detail-value" style="color:#64748b"></span></div>
+        <div class="detail-item"><span class="detail-label" style="min-width:80px;font-weight:600;color:#475569">知识ID：</span><span id="viewId" class="detail-value" style="color:#64748b"></span></div>
+        <div class="detail-item full-width" style="flex-direction:column">
+          <span class="detail-label" style="font-weight:600;color:#475569">内容：</span>
+          <p id="viewContent" class="detail-content" style="margin:8px 0 0;padding:16px;background:#f8fafc;border:1px solid var(--b1);border-radius:8px;color:#334155;line-height:1.6;white-space:pre-wrap"></p>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot"><button data-close="dlgView" class="btn btn-primary">关闭</button></div>
+  </div>
+</div>
+
+<script>
+  /* ==================== 配置与状态 ==================== */
+  const API_BASE_URL = 'http://127.0.0.1:8006';  // 后端运行在 8006 端口
+  const pageSize = 20;
+  let currentOffset = 0;
+  let hasMore = false;
+  let loadingMore = false;
+  let pendingRequests = 0;
+  let allKnowledgeIds = new Set(); // 用于追踪所有已加载的知识ID
+
+  const state = {
+    knowledgeList: [],
+    knowledgeTotal: 0,
+    performanceLevel: 'good',
+    healthStatus: 'unknown',
+    messages: [],
+    suggestions: [
+      { text: '如何使用检测功能？', icon: '❓' },
+      { text: '查看系统状态', icon: '📈' },
+      { text: '报表功能说明', icon: '📄' },
+      { text: '报警信息处理', icon: '⚠️' },
+    ],
+  };
+
+  /* ==================== dom refs ==================== */
+  const el = (id)=>document.getElementById(id);
+  const $groups = el('knowledgeGroups');
+  const $statTotal = el('statTotal');
+  const $statPerf = el('statPerf');
+  const $loadMoreWrap = el('loadMoreWrap');
+  const $btnLoadMore = el('btnLoadMore');
+  const $healthTag = el('healthTag');
+
+  const $messagesContainer = el('messagesContainer');
+  const $welcome = el('welcome');
+  const $quickActions = el('quickActions');
+  const $messagesList = el('messagesList');
+  const $input = el('inputMessage');
+
+  /* ==================== 工具函数 ==================== */
+  const perfTextMap = { excellent:'优秀', good:'良好', fair:'一般', poor:'较差' };
+  function levelClass(level){
+    return {excellent:'level-excellent',good:'level-good',fair:'level-fair',poor:'level-poor'}[level]||'';
+  }
+  function truncateText(t, n){ return t.length<=n? t : t.slice(0,n)+'…'; }
+  function formatDate(s){ if(!s) return ''; const d=new Date(s); return d.toLocaleString('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});}  
+  function getNowHM(){ const d=new Date(); return d.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}); }
+  function formatMessage(text){
+    return text
+      .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
+      .replace(/\n/g,'<br>')
+      .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g,'<em>$1</em>')
+      .replace(/`(.*?)`/g,'<code>$1</code>');
+  }
+  function scrollToBottom(){ $messagesContainer.scrollTop = $messagesContainer.scrollHeight; }
+  function escapeHtml(t){ const d=document.createElement('div'); d.textContent=t; return d.innerHTML; }
+
+  /* ==================== 知识库渲染 ==================== */
+  function groupBySource(list){
+    const m = new Map();
+    for(const it of list){ const s= it.source || '未分类'; if(!m.has(s)) m.set(s,[]); m.get(s).push(it); }
+    return m;
+  }
+  function renderGroups(){
+    const groups = groupBySource(state.knowledgeList);
+    $groups.innerHTML = '';
+    for(const [source,items] of groups){
+      const wrap = document.createElement('div'); wrap.className = 'group';
+      const head = document.createElement('div'); head.className = 'group-head'; head.innerHTML = `<span class="i">📂</span><span>${escapeHtml(source)}</span><span class="group-badge">${items.length}</span>`;
+      const body = document.createElement('div'); body.className='group-body';
+      items.forEach(item=>{
+        const node = document.createElement('div'); node.className='knowledge-item';
+        node.innerHTML = `
+          <div class="knowledge-content">
+            <p class="knowledge-text">${escapeHtml(truncateText(item.content,100))}</p>
+            <span class="knowledge-date">${formatDate(item.created_at)}</span>
+          </div>
+          <div class="knowledge-actions">
+            <button class="btn btn-ghost" data-view="${item.id}">查看</button>
+            <button class="btn btn-ghost" data-del="${item.id}">删除</button>
+          </div>`;
+        body.appendChild(node);
+      });
+      wrap.appendChild(head); wrap.appendChild(body);
+      head.addEventListener('click',()=>{ wrap.classList.toggle('open'); });
+      $groups.appendChild(wrap);
+    }
+    $loadMoreWrap.style.display = hasMore? 'block':'none';
+    $statTotal.textContent = state.knowledgeTotal;
+  }
+
+  /* ==================== 消息渲染 ==================== */
+  function renderMessages(){
+    const has = state.messages.length>0;
+    $welcome.style.display = has? 'none':'block';
+    $messagesList.style.display = has? 'flex':'none';
+    if(!has) return;
+    $messagesList.innerHTML = '';
+    state.messages.forEach(msg=>{
+      const wrap = document.createElement('div');
+      wrap.className = `message-wrapper ${msg.role==='user'?'user-message':'assistant-message'}`;
+      wrap.innerHTML = `
+        <div class="message-avatar">${msg.role==='user'?'🧑':'🤖'}</div>
+        <div class="message-content">
+          <div class="message-header">
+            <span class="message-role">${msg.role==='user'?'您':'助手'}</span>
+            <span class="message-time">${msg.time}</span>
+          </div>
+          <div class="message-text">${formatMessage(msg.content)}</div>
+        </div>`;
+      
+      // 添加思考步骤显示
+      if(msg.role==='assistant' && msg.thinkingSteps && msg.thinkingSteps.length){
+        const thinking = document.createElement('div'); thinking.className='thinking-steps';
+        msg.thinkingSteps.forEach(step=>{
+          const stepDiv = document.createElement('div'); stepDiv.className='thinking-step';
+          stepDiv.textContent = step;
+          thinking.appendChild(stepDiv);
+        });
+        wrap.querySelector('.message-content').appendChild(thinking);
+      }
+
+      if(msg.role==='assistant' && msg.relevantDocs && msg.relevantDocs.length){
+        const docs = document.createElement('div'); docs.className='relevant-docs';
+        const head = document.createElement('div'); head.className='docs-header'; head.innerHTML = '<span class="i">📄</span><span>参考资料 ('+msg.relevantDocs.length+')</span>';
+        docs.appendChild(head);
+        msg.relevantDocs.forEach((doc)=>{
+          const details = document.createElement('details'); details.className='doc';
+          const sum = document.createElement('summary');
+          sum.innerHTML = `<div class="doc-title"><span class="i">📖</span><span class="doc-source">${escapeHtml(doc.source||'未分类')}</span><span class="similarity-tag">相似度: ${(doc.similarity*100).toFixed(1)}%</span></div>`;
+          const content = document.createElement('div'); content.className='doc-content'; content.textContent = doc.content;
+          details.appendChild(sum); details.appendChild(content); docs.appendChild(details);
+        });
+        wrap.querySelector('.message-content').appendChild(docs);
+      }
+      $messagesList.appendChild(wrap);
+    });
+    scrollToBottom();
+  }
+
+  /* ==================== 聊天逻辑（SSE + 强日志） ==================== */
+  async function handleSend() {
+    const text = $input.value.trim(); if (!text) return;
+    if (pendingRequests > 0) { alert('正在处理上一个问题，请稍后再提问'); return; }
+
+    // 用户消息
+    state.messages.push({ role: 'user', content: text, time: getNowHM() });
+    $input.value = ''; renderMessages();
+
+    // 打字中占位
+    const typing = document.createElement('div');
+    typing.className = 'message-wrapper assistant-message';
+    typing.innerHTML = `<div class="message-avatar">🤖</div>
+      <div class="message-content"><div class="message-header">
+        <span class="message-role">助手</span><span class="message-time">${getNowHM()}</span>
+      </div><div class="typing-indicator"><span class="typing-text">正在思考</span>
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span></div></div>`;
+    $messagesList.appendChild(typing); scrollToBottom();
+
+    const aIndex = state.messages.length;
+    state.messages.push({ role: 'assistant', content: '', time: getNowHM(), relevantDocs: [], thinkingSteps: [] });
+    renderMessages();
+
+    // 获取当前消息的 DOM 元素引用，用于增量更新
+    let currentMessageWrapper = null;
+    let currentMessageText = null;
+    let currentThinkingSteps = null;
+
+    pendingRequests++;
+    try {
+      console.log('[SSE] 准备发起请求 ->', `${API_BASE_URL}/api/knowledge/query-stream`, {question: text});
+
+      const resp = await fetch(`${API_BASE_URL}/api/knowledge/query-stream`, {
+        method: 'POST',
+        mode: 'cors',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
+        },
+        body: JSON.stringify({ question: text }),
+      });
+
+      console.log('[SSE] fetch 返回状态：', resp.status, resp.statusText);
+      if (!resp.ok) {
+        throw new Error('HTTP ' + resp.status + ' ' + resp.statusText);
+      }
+
+      if (typing.parentNode) typing.remove();
+      if (!resp.body || !resp.body.getReader) {
+        throw new Error('此浏览器不支持 ReadableStream / SSE 解析');
+      }
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
+
+        console.log('[SSE] 收到 chunk：', chunk.slice(0, 120));
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          if (line.startsWith('data: ')) {
+            const jsonStr = line.slice(6).trim();
+            try {
+              const data = JSON.parse(jsonStr);
+              switch (data.type) {
+                case 'thinking':
+                  // 添加思考步骤
+                  if (!state.messages[aIndex].thinkingSteps) {
+                    state.messages[aIndex].thinkingSteps = [];
+                  }
+                  state.messages[aIndex].thinkingSteps.push(data.data || '');
+                  
+                  // 增量更新：只更新思考步骤区域
+                  if (!currentMessageWrapper) {
+                    currentMessageWrapper = $messagesList.children[$messagesList.children.length - 1];
+                    currentMessageText = currentMessageWrapper.querySelector('.message-text');
+                  }
+                  
+                  if (!currentThinkingSteps) {
+                    currentThinkingSteps = document.createElement('div');
+                    currentThinkingSteps.className = 'thinking-steps';
+                    currentMessageWrapper.querySelector('.message-content').insertBefore(
+                      currentThinkingSteps, 
+                      currentMessageText
+                    );
+                  }
+                  
+                  const stepDiv = document.createElement('div');
+                  stepDiv.className = 'thinking-step';
+                  stepDiv.textContent = data.data || '';
+                  currentThinkingSteps.appendChild(stepDiv);
+                  scrollToBottom();
+                  break;
+                  
+                case 'token':
+                  state.messages[aIndex].content += (data.data || '');
+                  
+                  // 增量更新：只更新文本内容，不重新渲染
+                  if (!currentMessageWrapper) {
+                    currentMessageWrapper = $messagesList.children[$messagesList.children.length - 1];
+                    currentMessageText = currentMessageWrapper.querySelector('.message-text');
+                  }
+                  
+                  if (currentMessageText) {
+                    currentMessageText.innerHTML = formatMessage(state.messages[aIndex].content);
+                    scrollToBottom();
+                  }
+                  break;
+                  
+                case 'docs':
+                  state.messages[aIndex].relevantDocs = Array.isArray(data.data) ? data.data : [];
+                  // 文档信息在最后统一渲染
+                  break;
+                  
+                case 'error':
+                  throw new Error(data.data || '服务错误');
+                  
+                case 'end':
+                  console.log('[SSE] end 事件');
+                  // 结束时完整渲染一次，添加参考资料
+                  renderMessages();
+                  break;
+              }
+            } catch (err) {
+              console.warn('[SSE] JSON 解析失败：', jsonStr, err);
+            }
+          } else {
+            console.debug('[SSE] 非 data 行：', line);
+          }
+        }
+      }
+
+      // 处理尾包
+      if (buffer.trim().startsWith('data: ')) {
+        try {
+          const tail = JSON.parse(buffer.slice(6).trim());
+          if (tail.type === 'thinking') {
+            if (!state.messages[aIndex].thinkingSteps) {
+              state.messages[aIndex].thinkingSteps = [];
+            }
+            state.messages[aIndex].thinkingSteps.push(tail.data || '');
+          }
+          if (tail.type === 'token') state.messages[aIndex].content += (tail.data || '');
+          if (tail.type === 'docs') state.messages[aIndex].relevantDocs = tail.data || [];
+          renderMessages();
+        } catch (_) {}
+      }
+    } catch (e) {
+      if (typing.parentNode) typing.remove();
+      console.error('[SSE] 失败：', e);
+      state.messages[aIndex].content = '抱歉，查询过程中出现错误：' + (e.message || e);
+      renderMessages();
+      alert('查询失败：' + (e.message || e));
+    } finally {
+      pendingRequests--;
+    }
+  }
+
+  /* ==================== 知识库：网络交互 ==================== */
+  async function loadKnowledgeList(reset=false){
+    try{
+      if(reset){ 
+        currentOffset=0; 
+        state.knowledgeList=[]; 
+        allKnowledgeIds.clear();
+      }
+      const url = `${API_BASE_URL}/api/knowledge/list?limit=${pageSize}&offset=${currentOffset}`;
+      const res = await fetch(url, { mode: 'cors' });
+      if(!res.ok) throw new Error('加载知识列表失败');
+      const data = await res.json();
+      if(data.success){
+        const newItems = data.data || [];
+        
+        // 过滤重复项
+        const uniqueNewItems = newItems.filter(item => {
+          if (allKnowledgeIds.has(item.id)) {
+            return false;
+          }
+          allKnowledgeIds.add(item.id);
+          return true;
+        });
+        
+        state.knowledgeList = reset ? uniqueNewItems : state.knowledgeList.concat(uniqueNewItems);
+        
+        // 修正：后端的 total 字段实际返回的是当前页数量，需要通过判断是否还有数据来确定
+        // 如果返回的数据少于 pageSize，说明没有更多了
+        hasMore = newItems.length >= pageSize;
+        
+        // 更新总数（使用已加载的数量）
+        state.knowledgeTotal = state.knowledgeList.length;
+        
+        console.log(`[知识列表] 加载成功，本次: ${newItems.length}, 总计: ${state.knowledgeTotal}, 还有更多: ${hasMore}`);
+      } else {
+        throw new Error(data.detail || '加载知识列表失败');
+      }
+    }catch(e){
+      console.error('[知识列表] 错误：', e);
+      alert('加载知识列表失败：' + (e.message || e));
+    }
+    renderGroups();
+  }
+
+  async function loadPerformanceStats(){
+    try{
+      const res = await fetch(`${API_BASE_URL}/api/knowledge/performance`, { mode: 'cors' });
+      if(!res.ok) throw new Error('加载性能统计失败');
+      const data = await res.json();
+      if(data.success){ 
+        state.performanceLevel = data.data.performance_level || 'good';
+        console.log('[性能统计] 性能等级：', state.performanceLevel);
+      }
+      else throw new Error(data.detail || '加载性能统计失败');
+    }catch(e){
+      console.error('[性能统计] 错误：', e);
+    }
+    const text = perfTextMap[state.performanceLevel] || '未知';
+    $statPerf.textContent = text;
+    $statPerf.className = `stat-value ${levelClass(state.performanceLevel)}`;
+  }
+
+  async function checkHealth(){
+    try{
+      const res = await fetch(`${API_BASE_URL}/api/knowledge/health`, { mode: 'cors' });
+      if(!res.ok) throw new Error('健康检查失败');
+      const data = await res.json();
+      state.healthStatus = data.status || 'unhealthy';
+      console.log('[健康检查] 状态：', state.healthStatus);
+    }catch(e){
+      console.error('[健康检查] 错误：', e);
+      state.healthStatus='unhealthy';
+    }
+    $healthTag.style.display = state.healthStatus==='healthy' ? 'inline-flex':'none';
+  }
+
+  async function addKnowledge(){
+    const content = el('addContent').value.trim();
+    const source = el('addSource').value.trim();
+    if(!content){ alert('请输入知识内容'); return; }
+    try{
+      const res = await fetch(`${API_BASE_URL}/api/knowledge/add`,{
+        method:'POST',
+        mode:'cors',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({content, source: source||undefined})
+      });
+      if(!res.ok) throw new Error('添加失败');
+      const data = await res.json();
+      if(!data.success) throw new Error(data.detail||'添加失败');
+      closeModal('dlgAdd'); el('addContent').value=''; el('addSource').value='';
+      await loadKnowledgeList(true); await loadPerformanceStats();
+      alert('知识添加成功');
+    }catch(e){ alert('添加知识失败：'+(e.message||e)); }
+  }
+
+  async function deleteKnowledge(id){
+    if(!confirm('确定要删除这条知识吗？')) return;
+    try{
+      const res = await fetch(`${API_BASE_URL}/api/knowledge/delete/${id}`,{method:'DELETE', mode:'cors'});
+      if(!res.ok) throw new Error('删除失败');
+      const data = await res.json();
+      if(!data.success) throw new Error(data.detail||'删除失败');
+      await loadKnowledgeList(true); await loadPerformanceStats();
+      alert('知识删除成功');
+    }catch(e){ alert('删除知识失败：'+(e.message||e)); }
+  }
+
+  /* ==================== 事件绑定与初始化 ==================== */
+  function showKnowledge(item){
+    el('viewSource').textContent = item.source||'未分类';
+    el('viewDate').textContent = formatDate(item.created_at);
+    el('viewId').textContent = item.id;
+    el('viewContent').textContent = item.content;
+    openModal('dlgView');
+  }
+
+  function openModal(id){ el(id).classList.add('open'); }
+  function closeModal(id){ el(id).classList.remove('open'); }
+
+  function renderQuickActions(){
+    $quickActions.innerHTML = '';
+    state.suggestions.forEach(({text,icon})=>{
+      const d = document.createElement('div'); d.className='suggestion-card';
+      d.innerHTML = `<div class="suggestion-icon" style="font-size:20px;color:var(--blue1)">${icon}</div><span class="suggestion-text" style="font-weight:500;color:#334155">${text}</span>`;
+      d.addEventListener('click', ()=>{ $input.value = text; handleSend(); });
+      $quickActions.appendChild(d);
+    });
+  }
+
+  function bindEvents(){
+    el('btnAddKnowledge').addEventListener('click',()=>openModal('dlgAdd'));
+    el('btnAddConfirm').addEventListener('click',addKnowledge);
+    document.querySelectorAll('[data-close]').forEach(x=>x.addEventListener('click',()=>closeModal(x.getAttribute('data-close'))));
+
+    const loadMoreBtn = document.getElementById('btnLoadMore');
+    if (loadMoreBtn) {
+      loadMoreBtn.addEventListener('click', async ()=>{
+        if(loadingMore) return; 
+        loadingMore=true; 
+        currentOffset += pageSize; 
+        await loadKnowledgeList(false); 
+        loadingMore=false;
+      });
+    }
+
+    $groups.addEventListener('click', (e)=>{
+      const t = e.target.closest('button'); if(!t) return;
+      const vid = t.getAttribute('data-view'); const did = t.getAttribute('data-del');
+      if(vid){ const item = state.knowledgeList.find(x=>String(x.id)===String(vid)); if(item) showKnowledge(item); }
+      if(did){ deleteKnowledge(did); }
+    });
+
+    el('btnSend').addEventListener('click', handleSend);
+    $input.addEventListener('keydown', (e)=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); handleSend(); }});
+    el('btnClear').addEventListener('click', ()=>{ state.messages=[]; renderMessages(); });
+  }
+
+  async function bootstrap(){
+    bindEvents(); renderQuickActions();
+    console.log('[INIT] 开始初始化，后端地址：', API_BASE_URL);
+    await checkHealth();
+    await loadKnowledgeList(true);
+    await loadPerformanceStats();
+    console.log('[INIT] 页面就绪');
+  }
+
+  bootstrap();
+</script>
+</body>
+</html>
+
+
