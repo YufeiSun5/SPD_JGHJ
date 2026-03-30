@@ -199,6 +199,8 @@
                 autoplay 
                 loop 
                 muted 
+                playsinline
+                preload="auto"
                 class="video-player"
                 @loadedmetadata="onVideoLoaded(index)"
               ></video>
@@ -292,14 +294,13 @@ const monitorDevices = computed(() => {
     current_status: 0 
   }
   
-  // 加载对应的视频文件
+  // 加载视频文件（同一段视频，第一个从头播放，第二个从中间播放）
   try {
-    const video1Path = new URL('../assets/videos/video1.mp4', import.meta.url).href
-    const video2Path = new URL('../assets/videos/video2.mp4', import.meta.url).href
+    const videoPath = new URL('../assets/videos/video1.mp4', import.meta.url).href
     
     return [
-      { ...monitor1, videoSrc: video1Path },
-      { ...monitor2, videoSrc: video2Path }
+      { ...monitor1, videoSrc: videoPath },
+      { ...monitor2, videoSrc: videoPath }
     ]
   } catch (error) {
     console.error('视频加载失败:', error)
@@ -697,21 +698,41 @@ const {
   handleFullscreenChange 
 } = useFullscreen()
 
-// 视频加载完成后设置不同的起始时间
-const onVideoLoaded = (index) => {
-  const video = videoRefs[index]
+// CN: 窗口切走再切回时，浏览器内核可能暂停视频，这里统一负责恢复播放。
+// EN: When the window loses and regains focus, the browser engine may pause media; resume it here.
+// JP: ウィンドウの切り替え後に動画が停止することがあるため、ここで再生を復帰する。
+const playMonitorVideo = (video, index) => {
   if (!video) return
-  
-  // 第一个视频从头开始，第二个视频从中间开始
-  if (index === 1 && video.duration) {
-    // 从视频时长的50%位置开始播放
+
+  if (index === 1 && video.duration && video.currentTime < 1) {
     video.currentTime = video.duration * 0.5
   }
-  
-  // 确保视频播放
-  video.play().catch(err => {
-    console.log('视频自动播放失败:', err)
+
+  const playPromise = video.play()
+  if (playPromise?.catch) {
+    playPromise.catch(err => {
+      console.log('视频自动播放失败:', err)
+    })
+  }
+}
+
+const onVideoLoaded = (index) => {
+  const video = videoRefs[index]
+  playMonitorVideo(video, index)
+}
+
+const resumeMonitorVideos = () => {
+  if (document.hidden) return
+
+  videoRefs.forEach((video, index) => {
+    if (video?.paused) {
+      playMonitorVideo(video, index)
+    }
   })
+}
+
+const handleWindowResume = () => {
+  setTimeout(resumeMonitorVideos, 0)
 }
 
 // 加载数据
@@ -1900,19 +1921,27 @@ onMounted(async () => {
   refreshTimer = setInterval(refreshAll, 5000)
   
   window.addEventListener('resize', handleResize)
+  window.addEventListener('focus', handleWindowResume)
+  window.addEventListener('pageshow', handleWindowResume)
   document.addEventListener('keydown', handleKeydown)
+  document.addEventListener('visibilitychange', handleWindowResume)
   
   // 监听全屏状态变化
   document.addEventListener('fullscreenchange', handleFullscreenChange)
   document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
   document.addEventListener('msfullscreenchange', handleFullscreenChange)
+
+  handleWindowResume()
 })
 
 onUnmounted(() => {
   if (refreshTimer) clearInterval(refreshTimer)
   if (trendChartTooltipTimer) clearInterval(trendChartTooltipTimer) // ✅ 清除tooltip定时器
   window.removeEventListener('resize', handleResize)
+  window.removeEventListener('focus', handleWindowResume)
+  window.removeEventListener('pageshow', handleWindowResume)
   document.removeEventListener('keydown', handleKeydown)
+  document.removeEventListener('visibilitychange', handleWindowResume)
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
   document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
   document.removeEventListener('msfullscreenchange', handleFullscreenChange)
