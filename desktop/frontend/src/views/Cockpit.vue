@@ -14,36 +14,49 @@
 
     <!-- 顶部KPI卡片（6个） -->
     <div class="kpi-cards">
-      <!-- OEE卡片 - 左右分栏显示两台设备 -->
+      <!-- OEE卡片 - 当班 OEE，左右分栏显示两台设备 -->
       <div class="kpi-card kpi-card-dual">
-        <div class="kpi-label">设备OEE</div>
+        <div class="kpi-label">当班OEE</div>
         <div class="kpi-dual-content">
           <div class="kpi-dual-item">
+            <div class="kpi-dual-value">{{ shiftDevice1OEE }}%</div>
             <div class="kpi-dual-label">一号机</div>
-            <div class="kpi-dual-value">{{ device1OEE }}%</div>
           </div>
           <div class="kpi-dual-divider"></div>
           <div class="kpi-dual-item">
+            <div class="kpi-dual-value">{{ shiftDevice2OEE }}%</div>
             <div class="kpi-dual-label">二号机</div>
-            <div class="kpi-dual-value">{{ device2OEE }}%</div>
           </div>
         </div>
         <div class="kpi-trend">
           <span class="trend-arrow">{{ deviceTrend.arrow }}</span>
-          <span class="trend-text">平均 {{ avgOEE }}%</span>
+          <span class="trend-text">平均 {{ shiftAvgOEE }}%</span>
+        </div>
+        <!-- 历史班次小字 -->
+        <div class="kpi-shift-history" v-if="pastShiftsOEE.length">
+          <div v-for="s in pastShiftsOEE" :key="s.shift_name" class="kpi-shift-row">
+            {{ s.shift_name }}: ①{{ getDeviceOEE(s, '设备#1') }}% ②{{ getDeviceOEE(s, '设备#2') }}%
+          </div>
         </div>
         <div class="kpi-sparkline" ref="sparkline1"></div>
       </div>
+      <!-- 产量卡片 - 当班产量 -->
       <div class="kpi-card">
-        <div class="kpi-label">今日产量</div>
-        <div class="kpi-value">{{ todayProduction }} <span class="unit">件</span></div>
+        <div class="kpi-label">当班产量</div>
+        <div class="kpi-value">{{ shiftTotalProduction }} <span class="unit">件</span></div>
         <div class="kpi-trend">
           <span class="trend-arrow">↑</span>
-          <span class="trend-text">实时统计</span>
+          <span class="trend-text">当班统计</span>
         </div>
         <div class="kpi-device-quality">
-          <span class="kpi-device-quality-item">一号机 {{ device1TodayProduction }} 件</span>
-          <span class="kpi-device-quality-item">二号机 {{ device2TodayProduction }} 件</span>
+          <span class="kpi-device-quality-item">一号机 {{ shiftDevice1Production }} 件</span>
+          <span class="kpi-device-quality-item">二号机 {{ shiftDevice2Production }} 件</span>
+        </div>
+        <!-- 历史班次小字 -->
+        <div class="kpi-shift-history" v-if="pastShiftsProdSummary.length">
+          <div v-for="s in pastShiftsProdSummary" :key="s.shift_name" class="kpi-shift-row">
+            {{ s.shift_name }}: ①{{ s.d1 }} ②{{ s.d2 }} 件
+          </div>
         </div>
         <div class="kpi-sparkline" ref="sparkline2"></div>
       </div>
@@ -73,23 +86,29 @@
         <div class="kpi-trend stable">{{ alarmCount > 0 ? '注意' : '稳定' }}</div>
         <div class="kpi-sparkline" ref="sparkline5"></div>
       </div>
-      <!-- 性能稼动率卡片 - 左右分栏显示两台设备 -->
+      <!-- 性能稼动率卡片 - 当班稼动率，左右分栏显示两台设备 -->
       <div class="kpi-card kpi-card-dual">
-        <div class="kpi-label">性能稼动率</div>
+        <div class="kpi-label">当班稼动率</div>
         <div class="kpi-dual-content">
           <div class="kpi-dual-item">
+            <div class="kpi-dual-value">{{ shiftDevice1Performance }}%</div>
             <div class="kpi-dual-label">一号机</div>
-            <div class="kpi-dual-value">{{ device1Performance }}%</div>
           </div>
           <div class="kpi-dual-divider"></div>
           <div class="kpi-dual-item">
+            <div class="kpi-dual-value">{{ shiftDevice2Performance }}%</div>
             <div class="kpi-dual-label">二号机</div>
-            <div class="kpi-dual-value">{{ device2Performance }}%</div>
           </div>
         </div>
         <div class="kpi-trend">
           <span class="trend-arrow">{{ performanceTrend.arrow }}</span>
-          <span class="trend-text">平均 {{ avgPerformanceEfficiency }}%</span>
+          <span class="trend-text">平均 {{ shiftAvgPerformance }}%</span>
+        </div>
+        <!-- 历史班次小字 -->
+        <div class="kpi-shift-history" v-if="pastShiftsOEE.length">
+          <div v-for="s in pastShiftsOEE" :key="s.shift_name" class="kpi-shift-row">
+            {{ s.shift_name }}: ①{{ getDevicePerf(s, '设备#1') }}% ②{{ getDevicePerf(s, '设备#2') }}%
+          </div>
         </div>
         <div class="kpi-sparkline" ref="sparkline6"></div>
       </div>
@@ -144,7 +163,7 @@
         <div class="panel">
           <div class="panel-header">
             <span class="dot"></span>
-            <span class="panel-title">当日质量分布</span>
+            <span class="panel-title">当班质量分布</span>
           </div>
           <div class="quality-charts">
             <div class="quality-item">
@@ -172,6 +191,12 @@
                   <span>不合格</span>
                 </div>
               </div>
+            </div>
+          </div>
+          <!-- 历史班次良品率小字 -->
+          <div class="kpi-shift-history" v-if="pastShiftsQuality.length" style="padding: 4px 6px 0;">
+            <div v-for="s in pastShiftsQuality" :key="s.shift_name" class="kpi-shift-row">
+              {{ s.shift_name }}: ①{{ getDeviceQuality(s, '设备#1') }}% ②{{ getDeviceQuality(s, '设备#2') }}%
             </div>
           </div>
         </div>
@@ -320,8 +345,23 @@ const historyData = ref({
   // 注意：报警数和性能稼动率不使用历史数据点，直接使用 hourlyAlarmCount 和 hourlyOEE（每小时统计）
 })
 
-// ✅ OEE 数据（每小时）
+// ✅ OEE 数据（每小时，全天，供 sparkline 折线图使用）
 const hourlyOEE = ref([])
+
+// CN: 逻辑日活动班次列表（含 has_arrived / is_current 标记，用于 OEE 趋势图 x 轴构建）
+// EN: Active shifts for the current logical day (with arrival flags for OEE chart x-axis).
+// JP: 現在の論理日のアクティブシフト一覧（OEEチャートのx軸構築用、到達フラグ付き）。
+const shiftsForDay = ref([])
+
+// CN: 当前逻辑日所有已到达班次的 OEE 汇总（含当班+历史班，用于顶部卡片当班大字+历史小字）
+// EN: OEE summaries for all arrived shifts of the logical day (current shift large text + history small text).
+// JP: 到達済シフト全体のOEE集計（当班大字表示＋過去班小字履歴）。
+const allShiftsOEE = ref([])
+
+// CN: 当前逻辑日所有已到达班次的良品率汇总（用于左下角饼图当班数据+历史小字）
+// EN: Quality summaries for all arrived shifts of the logical day.
+// JP: 到達済シフト全体の良品率集計（左下角饼图用）。
+const allShiftsQuality = ref([])
 
 let refreshTimer = null
 let charts = []
@@ -624,6 +664,129 @@ const performanceTrend = computed(() => {
   return { arrow: '↓', text }
 })
 
+// ── 当班数据辅助 computed ──────────────────────────────────────────────────────
+// CN: 从 allShiftsOEE 中找出当前班次（is_current 优先，否则最后一个已到达的）
+// EN: Resolve the current shift summary from allShiftsOEE (is_current preferred, else last arrived).
+// JP: allShiftsOEEから当班サマリを特定（is_current優先、なければ最後の到達済）。
+const currentShiftOEESummary = computed(() =>
+  allShiftsOEE.value.find(s => s.is_current) ||
+  [...allShiftsOEE.value].reverse().find(s => s.has_arrived) ||
+  allShiftsOEE.value[0] || null
+)
+
+// CN: 过去2班（排除当前班，最近的排前）
+// EN: Past 2 shifts excluding current, most recent first.
+// JP: 当番を除く過去2シフト（最新が先頭）。
+const pastShiftsOEE = computed(() => {
+  const currName = currentShiftOEESummary.value?.shift_name
+  return allShiftsOEE.value
+    .filter(s => s.has_arrived && s.shift_name !== currName)
+    .slice(-2).reverse()
+})
+
+const currentShiftQuality = computed(() =>
+  allShiftsQuality.value.find(s => s.is_current) ||
+  [...allShiftsQuality.value].reverse().find(s => s.has_arrived) ||
+  allShiftsQuality.value[0] || null
+)
+
+const pastShiftsQuality = computed(() => {
+  const currName = currentShiftQuality.value?.shift_name
+  return allShiftsQuality.value
+    .filter(s => s.has_arrived && s.shift_name !== currName)
+    .slice(-2).reverse()
+})
+
+// CN: 辅助函数：从班次OEE汇总中提取指定设备的数值
+// EN: Helper: extract per-device values from a ShiftOEESummary/ShiftQualitySummary object.
+// JP: ヘルパー：ShiftOEESummary/ShiftQualitySummaryから設備別値を取得。
+const getDeviceOEE = (summary, deviceName) => {
+  const d = summary?.devices?.find(d => d.device_name === deviceName)
+  return d?.oee_pct != null ? d.oee_pct.toFixed(1) : '0.0'
+}
+const getDevicePerf = (summary, deviceName) => {
+  const d = summary?.devices?.find(d => d.device_name === deviceName)
+  return d?.performance_pct != null ? d.performance_pct.toFixed(1) : '0.0'
+}
+const getDeviceQuality = (summary, deviceName) => {
+  const d = summary?.devices?.find(d => d.device_name === deviceName)
+  return d?.quality_rate != null ? d.quality_rate.toFixed(1) : '100.0'
+}
+
+// 当班 OEE ──
+const shiftDevice1OEE = computed(() => getDeviceOEE(currentShiftOEESummary.value, '设备#1'))
+const shiftDevice2OEE = computed(() => getDeviceOEE(currentShiftOEESummary.value, '设备#2'))
+const shiftAvgOEE = computed(() => {
+  const s = currentShiftOEESummary.value
+  if (!s?.devices?.length) return '0.0'
+  const sum = s.devices.reduce((acc, d) => acc + (d.oee_pct || 0), 0)
+  return (sum / s.devices.length).toFixed(1)
+})
+
+// 当班性能稼动率 ──
+const shiftDevice1Performance = computed(() => getDevicePerf(currentShiftOEESummary.value, '设备#1'))
+const shiftDevice2Performance = computed(() => getDevicePerf(currentShiftOEESummary.value, '设备#2'))
+const shiftAvgPerformance = computed(() => {
+  const s = currentShiftOEESummary.value
+  if (!s?.devices?.length) return '0.0'
+  const sum = s.devices.reduce((acc, d) => acc + (d.performance_pct || 0), 0)
+  return (sum / s.devices.length).toFixed(1)
+})
+
+// 当班产量（前端过滤 hourlyProduction 按班次时间窗口）──
+// CN: 从 shiftsForDay 中找当前班（与 OEE 保持一致的逻辑）
+// EN: Resolve current shift from shiftsForDay (same fallback logic as OEE).
+// JP: shiftsForDayから当班を特定（OEEと同じフォールバックロジック）。
+const currentShiftFromLogicalDay = computed(() =>
+  shiftsForDay.value.find(s => s.is_current) ||
+  [...shiftsForDay.value].reverse().find(s => s.has_arrived) ||
+  shiftsForDay.value[0] || null
+)
+
+const filterProdByShift = (shift, deviceNames = null) => {
+  if (!shift) return 0
+  const pad = n => String(n).padStart(2, '0')
+  const base = shift.logical_date
+  const startMin = shift.start_hour * 60 + shift.start_min
+  const endMin = shift.end_hour * 60 + shift.end_min
+  const startDt = new Date(`${base}T${pad(shift.start_hour)}:${pad(shift.start_min)}:00`)
+  let endDt
+  if (endMin > startMin) {
+    endDt = new Date(`${base}T${pad(shift.end_hour)}:${pad(shift.end_min)}:00`)
+  } else {
+    const next = new Date(base)
+    next.setDate(next.getDate() + 1)
+    const nd = next.toISOString().slice(0, 10)
+    endDt = new Date(`${nd}T${pad(shift.end_hour)}:${pad(shift.end_min)}:00`)
+  }
+  return hourlyProduction.value
+    .filter(item => {
+      if (deviceNames && !deviceNames.includes(item.device_name)) return false
+      const t = new Date(item.time_slot)
+      return t >= startDt && t < endDt
+    })
+    .reduce((sum, item) => sum + (item.ok_qty || 0) + (item.ng_qty || 0), 0)
+}
+
+const shiftTotalProduction = computed(() => filterProdByShift(currentShiftFromLogicalDay.value))
+const shiftDevice1Production = computed(() => filterProdByShift(currentShiftFromLogicalDay.value, ['设备#1', '设备1', '一号机']))
+const shiftDevice2Production = computed(() => filterProdByShift(currentShiftFromLogicalDay.value, ['设备#2', '设备2', '二号机']))
+
+// 过去2班产量摘要（用于卡片底部小字）
+const pastShiftsProdSummary = computed(() => {
+  const currName = currentShiftFromLogicalDay.value?.name
+  return shiftsForDay.value
+    .filter(s => s.has_arrived && s.name !== currName)
+    .slice(-2).reverse()
+    .map(s => ({
+      shift_name: s.name,
+      d1: filterProdByShift(s, ['设备#1', '设备1', '一号机']),
+      d2: filterProdByShift(s, ['设备#2', '设备2', '二号机'])
+    }))
+})
+
+// ── 当班数据辅助 end ───────────────────────────────────────────────────────────
+
 // ✅ 保留旧的基于工单的性能稼动率计算（可能其他地方需要）
 const avgPerformanceEfficiencyByOrder = computed(() => {
   // 筛选有效工单：有开工时间且良品数>0
@@ -868,200 +1031,148 @@ const loadDailyQualityTrend = async () => {
   }
 }
 
+// CN: 加载人员稼动率 — 基于逻辑日班次（shiftsForDay）计算，与 OEE/良品图保持一致。
+//     应工作时长 = 所有已到达班次的时间窗口之和（扣除班内休息），
+//     实际工作时长 = 员工 session 在班次窗口内的有效时长（同样扣除重叠休息段）。
+// EN: Load staff efficiency — computed from logical-day shifts (consistent with OEE/production).
+//     Available work = sum of arrived shift windows minus breaks;
+//     Actual work = session overlap with shift windows minus break overlaps.
+// JP: 人員稼働率読込 — OEE/良品と同じ論理日シフトに基づき算出。
+//     応工作 = 到達済シフト窓の合計−休憩、実作業 = セッションとシフト窓の重畳−休憩重畳。
 const loadStaffEfficiency = async () => {
   try {
     if (!window.go?.main?.App) return
-    
+
     // 1. 获取所有员工
-    const allStaff = await window.go.main.App.GetAllStaff(null, 1) // 只要在职员工
+    const allStaff = await window.go.main.App.GetAllStaff(null, 1)
     if (!allStaff || allStaff.length === 0) {
       staffEfficiency.value = []
       return
     }
-    
-    // 2. ✅ 改为今日的班次记录
+
+    // 2. ✅ 使用逻辑日班次（与 OEE 一致）
+    const shifts = shiftsForDay.value || []
+    // 只取已到达的班次（顺序前缀，与 OEE 图逻辑相同）
+    let lastArrivedIdx = -1
+    for (let i = 0; i < shifts.length; i++) {
+      if (shifts[i].has_arrived) lastArrivedIdx = i
+      else break
+    }
+    const arrivedShifts = lastArrivedIdx >= 0 ? shifts.slice(0, lastArrivedIdx + 1) : []
+    if (arrivedShifts.length === 0) {
+      staffEfficiency.value = []
+      return
+    }
+
+    const logicalDate = shifts[0]?.logical_date || new Date().toISOString().split('T')[0]
+    const logicalBase = new Date(logicalDate + 'T00:00:00')
     const now = new Date()
-    const todayStart = new Date(now)
-    todayStart.setHours(0, 0, 0, 0) // 今日0点
-    
+
+    // 3. 构建班次窗口列表（绝对 Date 对象，便于后续计算）
+    const shiftWindows = arrivedShifts.map(s => {
+      const startMin = s.start_hour * 60 + s.start_min
+      const endMin   = s.end_hour * 60 + s.end_min
+      const isCross  = endMin <= startMin
+      const shiftStart = new Date(logicalBase.getTime() + startMin * 60000)
+      const shiftEnd   = new Date(logicalBase.getTime() + (isCross ? endMin + 24 * 60 : endMin) * 60000)
+      // 如果当前班次还在进行中，截止到"现在"
+      const effectiveEnd = s.is_current && now < shiftEnd ? now : shiftEnd
+      return { start: shiftStart, end: effectiveEnd, shift: s }
+    })
+
+    // 4. 休息段转为绝对 Date 辅助函数（休息段属于逻辑日内，可能跨日）
+    const breaks = breakTimes.value.map(bt => ({
+      start: bt.start_hour * 60 + bt.start_min,
+      end:   bt.end_hour * 60 + bt.end_min
+    }))
+
+    // 辅助：计算「时间段 [a, b) 内被休息段占用的分钟数」
+    const overlapBreakMinutes = (aStart, aEnd) => {
+      const aStartMin = (aStart - logicalBase) / 60000
+      const aEndMin   = (aEnd - logicalBase) / 60000
+      let total = 0
+      for (const brk of breaks) {
+        const os = Math.max(aStartMin, brk.start)
+        const oe = Math.min(aEndMin, brk.end)
+        if (os < oe) total += (oe - os)
+      }
+      return total
+    }
+
+    // 5. 计算应工作总分钟数（所有已到达班次窗口扣除休息）
+    let totalAvailableMinutes = 0
+    for (const w of shiftWindows) {
+      const raw = (w.end - w.start) / 60000
+      const brk = overlapBreakMinutes(w.start, w.end)
+      totalAvailableMinutes += Math.max(0, raw - brk)
+    }
+
+    console.log(`📊 人员稼动率（逻辑日 ${logicalDate}，已到达 ${arrivedShifts.length} 个班次）`)
+    console.log(`   应工作总时长: ${Math.round(totalAvailableMinutes)} 分钟 (${(totalAvailableMinutes/60).toFixed(1)} 小时)`)
+
+    // 6. 获取逻辑日的班次记录（按日期范围查询）
+    // 跨日班次：结束日期可能是 logicalDate + 1
+    const endDate = (() => {
+      const last = shiftWindows[shiftWindows.length - 1]
+      return last.end.toISOString().split('T')[0]
+    })()
+
     let allSessions = []
     try {
-      const todayStr = now.toISOString().split('T')[0] // YYYY-MM-DD 格式
-      
-      allSessions = await window.go.main.App.GetSessionHistory(null, null, todayStr, todayStr) || []
-      console.log(`✅ 获取今日所有班次 (${todayStr})，共`, allSessions.length, '个')
-      
-      // 补充活动班次（可能还未结束，不在历史记录中）
+      allSessions = await window.go.main.App.GetSessionHistory(null, null, logicalDate, endDate) || []
+      // 补充当前活动 session
       const activeSessions = await window.go.main.App.GetAllActiveSessions() || []
       if (activeSessions.length > 0) {
-        console.log('📝 获取到活动班次', activeSessions.length, '个')
-        // 只添加今日的活动班次，并且去重（避免与历史记录重复）
-        const todayActiveSessions = activeSessions.filter(s => {
-          const loginTime = new Date(s.login_time)
-          // 必须是今日的班次
-          if (loginTime < todayStart) return false
-          
-          // ✅ 检查是否已经存在于历史记录中（根据session_id去重）
-          const isDuplicate = allSessions.some(existing => existing.session_id === s.session_id)
-          return !isDuplicate
-        })
-        
-        if (todayActiveSessions.length > 0) {
-          console.log('📝 补充活动班次（去重后）', todayActiveSessions.length, '个')
-          allSessions = [...allSessions, ...todayActiveSessions]
-        } else {
-          console.log('📝 活动班次已在历史记录中，无需补充')
-        }
+        const existIds = new Set(allSessions.map(s => s.session_id))
+        const extra = activeSessions.filter(s => !existIds.has(s.session_id))
+        if (extra.length > 0) allSessions = [...allSessions, ...extra]
       }
+      console.log(`   获取到 ${allSessions.length} 条 session 记录`)
     } catch (e) {
-      console.error('获取今日班次失败:', e)
-      allSessions = []
+      console.error('获取逻辑日 session 失败:', e)
     }
-    
-    // 3. ✅ 计算今日到当前时间的应工作时长（实时计算，扣除休息）
-    // ✅ 使用配置的每日应工作分钟数
-    const fullDayWorkMinutes = dailyWorkMinutes.value // 从配置加载
-    
-    // ✅ 使用配置的休息时间段（动态读取）
-    const breaks = breakTimes.value.map(bt => ({
-      start: { h: bt.start_hour, m: bt.start_min },
-      end: { h: bt.end_hour, m: bt.end_min }
-    }))
-    
-    // 工作时间：7:40 - 16:20
-    const workStart = { h: 7, m: 40 }
-    const workEnd = { h: 16, m: 20 }
-    
-    const currentHour = now.getHours()
-    const currentMinute = now.getMinutes()
-    
-    // 计算从7:40到当前时间的总分钟数
-    let totalMinutes = 0
-    
-    // 判断是否在工作时间内
-    const currentTimeInMin = currentHour * 60 + currentMinute
-    const workStartInMin = workStart.h * 60 + workStart.m
-    const workEndInMin = workEnd.h * 60 + workEnd.m
-    
-    if (currentTimeInMin < workStartInMin) {
-      // 还没到上班时间
-      totalMinutes = 0
-    } else if (currentTimeInMin > workEndInMin) {
-      // 已经过了下班时间，使用配置的全天应工作时长
-      totalMinutes = fullDayWorkMinutes
-    } else {
-      // 在工作时间内，计算从7:40到现在的时间
-      totalMinutes = currentTimeInMin - workStartInMin
-      
-      // 扣除已经过去的休息时间
-      for (const breakTime of breaks) {
-        const breakStartInMin = breakTime.start.h * 60 + breakTime.start.m
-        const breakEndInMin = breakTime.end.h * 60 + breakTime.end.m
-        
-        if (currentTimeInMin > breakEndInMin) {
-          // 当前时间已过这个休息时段，全部扣除
-          totalMinutes -= (breakEndInMin - breakStartInMin)
-        } else if (currentTimeInMin > breakStartInMin && currentTimeInMin <= breakEndInMin) {
-          // 当前时间正在这个休息时段内，扣除已经过去的部分
-          totalMinutes -= (currentTimeInMin - breakStartInMin)
-        }
-        // 如果当前时间还没到这个休息时段，不扣除
-      }
-    }
-    
-    // 确保不为负数
-    totalMinutes = Math.max(0, totalMinutes)
-    
-    console.log(`📊 今日稼动率计算基准 (实时):`)
-    console.log(`   - 当前时间: ${currentHour}:${String(currentMinute).padStart(2, '0')}`)
-    console.log(`   - 工作时间: 7:40 - 16:20`)
-    console.log(`   - 休息时间: ${breakTimes.value.map(bt => `${bt.start_hour}:${String(bt.start_min).padStart(2,'0')}-${bt.end_hour}:${String(bt.end_min).padStart(2,'0')}`).join(', ')} [从配置加载]`)
-    console.log(`   - 全天应工作: ${fullDayWorkMinutes}分钟 (${(fullDayWorkMinutes/60).toFixed(2)}小时) [从配置加载]`)
-    console.log(`   - 到目前为止应工作: ${totalMinutes}分钟 (${(totalMinutes/60).toFixed(1)}小时)`)
-    console.log(`📊 今日班次总数: ${allSessions.length} 个`)
-    
-    // 4. 为每个员工计算稼动率（基于今日的班次，扣除休息时间）
+
+    // 7. 为每个员工计算稼动率
     const efficiencyData = []
-    
-    // 辅助函数：计算时间段内的休息时间（分钟）
-    const calculateBreakMinutes = (startTime, endTime) => {
-      const startInMin = startTime.getHours() * 60 + startTime.getMinutes()
-      const endInMin = endTime.getHours() * 60 + endTime.getMinutes()
-      
-      let breakMinutes = 0
-      
-      for (const breakTime of breaks) {
-        const breakStartInMin = breakTime.start.h * 60 + breakTime.start.m
-        const breakEndInMin = breakTime.end.h * 60 + breakTime.end.m
-        
-        // 计算班次时间段与休息时间段的重叠部分
-        const overlapStart = Math.max(startInMin, breakStartInMin)
-        const overlapEnd = Math.min(endInMin, breakEndInMin)
-        
-        if (overlapStart < overlapEnd) {
-          breakMinutes += (overlapEnd - overlapStart)
-        }
-      }
-      
-      return breakMinutes
-    }
-    
     for (const staff of allStaff) {
       let workingMinutes = 0
-      
-      // 查找包含该员工的今日班次
+
       for (const session of allSessions) {
         try {
           const staffIds = JSON.parse(session.staff_ids || '[]')
-          if (staffIds.includes(staff.id)) {
-            const loginTime = new Date(session.login_time)
-            const logoutTime = session.logout_time ? new Date(session.logout_time) : now
-            
-            // 只统计今日的时间
-            if (loginTime >= todayStart) {
-              // 计算总时长（分钟）
-              const totalMinutes = (logoutTime - loginTime) / 60000
-              
-              // ✅ 扣除休息时间
-              const breakMinutes = calculateBreakMinutes(loginTime, logoutTime)
-              const effectiveMinutes = totalMinutes - breakMinutes
-              
-              if (effectiveMinutes > 0) {
-                workingMinutes += effectiveMinutes
-                const sessionStatus = session.logout_time ? '已结束' : '进行中'
-                console.log(`👷 员工 ${staff.name} 班次(${sessionStatus}):`)
-                console.log(`   登录: ${loginTime.toLocaleString()}`)
-                console.log(`   登出: ${logoutTime.toLocaleString()}`)
-                console.log(`   总时长: ${Math.round(totalMinutes)}分钟`)
-                console.log(`   休息时间: ${Math.round(breakMinutes)}分钟`)
-                console.log(`   有效工作: ${Math.round(effectiveMinutes)}分钟`)
-              }
-            }
+          if (!staffIds.includes(staff.id)) continue
+
+          const loginTime  = new Date(session.login_time)
+          const logoutTime = session.logout_time ? new Date(session.logout_time) : now
+
+          // 计算 session 与每个班次窗口的有效重叠（扣除休息）
+          for (const w of shiftWindows) {
+            const os = Math.max(loginTime.getTime(), w.start.getTime())
+            const oe = Math.min(logoutTime.getTime(), w.end.getTime())
+            if (os >= oe) continue
+            const rawOverlap = (oe - os) / 60000
+            const brkOverlap = overlapBreakMinutes(new Date(os), new Date(oe))
+            workingMinutes += Math.max(0, rawOverlap - brkOverlap)
           }
         } catch (e) {
-          console.error('解析班次数据失败:', e)
+          // 跳过解析失败的 session
         }
       }
-      
-      // 计算稼动率（整数，允许超过100%）
-      let efficiency = 0
-      if (totalMinutes > 0) {
-        efficiency = Math.round((workingMinutes / totalMinutes) * 100)
-      }
-      
-      console.log(`📊 员工 ${staff.name}: 今日工作 ${Math.round(workingMinutes)} 分钟 / 应工作 ${Math.round(totalMinutes)} 分钟 = ${efficiency}%`)
-      
+
+      const efficiency = totalAvailableMinutes > 0
+        ? Math.round((workingMinutes / totalAvailableMinutes) * 100)
+        : 0
+
       efficiencyData.push({
         staff_id: staff.id,
         staff_name: staff.name,
         working_min: Math.round(workingMinutes),
-        efficiency: efficiency // ✅ 允许超过100%（加班情况）
+        efficiency
       })
     }
-    
-    // 按稼动率降序排序
+
     staffEfficiency.value = efficiencyData.sort((a, b) => b.efficiency - a.efficiency)
-    
+
   } catch (e) {
     console.error('加载人员稼动率失败:', e)
     staffEfficiency.value = []
@@ -1159,6 +1270,21 @@ const loadBreakTimes = async () => {
   }
 }
 
+// CN: 加载逻辑日班次列表，用于 OEE 趋势图 x 轴分段和背景色渲染
+// EN: Load logical-day shift list for OEE chart x-axis segmentation and background coloring.
+// JP: OEEチャートのx軸分割と背景色描画用に論理日シフト一覧を読み込む。
+const loadShiftsForDay = async () => {
+  try {
+    if (window.go?.main?.App?.GetShiftsForLogicalDay) {
+      const result = await window.go.main.App.GetShiftsForLogicalDay()
+      shiftsForDay.value = result || []
+    }
+  } catch (e) {
+    console.error('加载逻辑日班次失败:', e)
+    shiftsForDay.value = []
+  }
+}
+
 // ✅ 加载每小时OEE数据
 const loadHourlyOEE = async () => {
   try {
@@ -1220,6 +1346,34 @@ const loadHourlyOEE = async () => {
   }
 }
 
+// CN: 加载当前逻辑日所有已到达班次的 OEE 汇总（用于卡片当班大字+历史班次小字）
+// EN: Load OEE summaries for all arrived shifts of the current logical day.
+// JP: 現在の論理日の到達済シフト全体のOEEサマリを読み込む。
+const loadAllShiftsOEE = async () => {
+  try {
+    if (window.go?.main?.App?.GetAllShiftsOEESummary) {
+      allShiftsOEE.value = await window.go.main.App.GetAllShiftsOEESummary() || []
+    }
+  } catch (e) {
+    console.error('❌ 加载班次OEE汇总失败:', e)
+    allShiftsOEE.value = []
+  }
+}
+
+// CN: 加载当前逻辑日所有已到达班次的良品率汇总（用于左下角饼图当班数据+历史小字）
+// EN: Load quality summaries for all arrived shifts of the current logical day.
+// JP: 現在の論理日の到達済シフト全体の良品率サマリを読み込む。
+const loadAllShiftsQuality = async () => {
+  try {
+    if (window.go?.main?.App?.GetAllShiftsQualitySummary) {
+      allShiftsQuality.value = await window.go.main.App.GetAllShiftsQualitySummary() || []
+    }
+  } catch (e) {
+    console.error('❌ 加载班次良品率汇总失败:', e)
+    allShiftsQuality.value = []
+  }
+}
+
 const refreshAll = async () => {
   await Promise.all([
     loadOrders(),
@@ -1236,7 +1390,10 @@ const refreshAll = async () => {
     loadUtilizationTrend(),
     loadAlarmCount(),
     loadHourlyAlarmCount(),  // ✅ 加载每小时报警数
-    loadHourlyOEE()  // ✅ 加载每小时OEE
+    loadHourlyOEE(),         // ✅ 加载每小时OEE（全天，用于sparkline）
+    loadShiftsForDay(),      // ✅ 加载逻辑日班次（OEE x轴）
+    loadAllShiftsOEE(),      // ✅ 加载所有班次OEE汇总（当班大字+历史小字）
+    loadAllShiftsQuality()   // ✅ 加载所有班次良品率汇总（左下角饼图）
   ])
   
   // 更新历史数据用于迷你图
@@ -1372,71 +1529,120 @@ const initSparklines = () => {
 }
 
 // 初始化今日产量图表 - 使用新的数据结构（time_slot + device_name）
+// CN: 初始化今日良品图（柱状图），x 轴与 OEE 趋势图保持相同的班次分段逻辑
+// EN: Init today's good-parts bar chart; x-axis uses the same shift-based segment logic as OEE.
+// JP: 今日の良品棒グラフを初期化。x軸はOEEトレンドチャートと同じシフト分割ロジックを使用。
 const initProductionChart = () => {
   if (!productionChart.value) return
   const chart = echarts.init(productionChart.value)
   charts.push(chart)
 
-  // ✅ 固定时间轴：7:00 到 17:00（与OEE趋势图一致，对应工作时间 7:40-16:20）
-  const startHour = 7
-  const endHour = 17
-  
-  const hours = []
-  for (let i = startHour; i <= endHour; i++) {
-    hours.push(`${i}:00`)
+  // ── 与 OEE 图相同：顺序前缀 → 只取已到达班次 ──────────────
+  let lastArrivedIdx = -1
+  for (let i = 0; i < shiftsForDay.value.length; i++) {
+    if (shiftsForDay.value[i].has_arrived) lastArrivedIdx = i
+    else break
   }
-  
-  console.log(`📊 产量图时间轴: ${startHour}点-${endHour}点, 共${hours.length}小时`)
-  
-  // ✅ 从新的数据结构中获取设备列表
-  const deviceNames = [...new Set(hourlyProduction.value.map(h => h.device_name))]
-  console.log('📊 有产量数据的设备:', deviceNames)
-  
-  if (deviceNames.length === 0) {
-    console.warn('⚠️ 没有产量数据，显示空图表')
+  const arrivedShifts = lastArrivedIdx >= 0 ? shiftsForDay.value.slice(0, lastArrivedIdx + 1) : []
+
+  // ── 逻辑日期（用于 time_slot 匹配）─────────────────────────
+  const logicalDate = shiftsForDay.value[0]?.logical_date || new Date().toISOString().split('T')[0]
+
+  // ── 班次配色（与 OEE 保持一致）──────────────────────────────
+  const shiftBgColors = [
+    'rgba(0, 210, 130, 0.11)',
+    'rgba(50, 140, 255, 0.11)',
+    'rgba(255, 165, 30, 0.11)',
+    'rgba(200, 80, 220, 0.11)',
+    'rgba(0, 210, 220, 0.11)',
+  ]
+
+  // ── 构建 x 轴 & markArea（value 轴 + 小时小数值 = 真正分钟级精度）────
+  // CN: x 轴使用 value 类型。ECharts category 轴的 OrdinalScale.parse() 会对小数
+  //     做 Math.round() 取整，导致 markArea 分钟精度被抹杀。改用 value 轴后，
+  //     markArea 的 xAxis 直接用小时小数（如 7.667 = 07:40），真正精确对齐班次分钟边界。
+  // EN: Uses value-type x-axis. Category axis OrdinalScale.parse() rounds fractional values
+  //     via Math.round(), destroying minute precision. With value axis, markArea xAxis uses
+  //     hour decimals (e.g. 7.667 = 07:40) for true minute-level shift boundary alignment.
+  // JP: value型x軸を使用。category軸のOrdinalScale.parse()は小数をMath.round()で丸めるため
+  //     分精度が消える。value軸なら markArea の xAxis に時刻小数(例: 7.667=07:40)を直接使用し、
+  //     シフト境界を分単位で正確に揃えられる。
+  const hourValues = []
+  const hourSet = new Set()
+  const markAreaData = []
+
+  if (arrivedShifts.length === 0) {
     chart.setOption({
-      animation: false,
-      grid: { top: 35, right: 25, bottom: 35, left: 45 },
-      xAxis: { type: 'category', data: hours, axisLine: { lineStyle: { color: '#1e3a5f' } }, axisLabel: { color: '#6b7f9e', fontSize: 10 } },
-      yAxis: { type: 'value', splitLine: { lineStyle: { color: '#1e3a5f' } }, axisLabel: { color: '#6b7f9e', fontSize: 10 } },
-      series: []
+      graphic: [{ type: 'text', left: 'center', top: 'middle',
+        style: { text: '等待班次开始...', fill: '#6b7f9e', fontSize: 13 } }]
     })
     return
   }
-  
-  // ✅ 为每个设备生成一个系列
+
+  // 构建 hourValues 数组（整数小时值，供数据映射用）
+  const shiftMeta = arrivedShifts.map(shift => {
+    const startH  = shift.start_hour
+    const endHRaw = shift.end_hour
+    const endM    = shift.end_min
+    const isCrossMidnight = endHRaw < startH || (endHRaw === startH && endM < shift.start_min)
+    const effectiveEndH   = isCrossMidnight ? endHRaw + 24 : endHRaw
+    const lastBucketH     = (endM === 0) ? effectiveEndH - 1 : effectiveEndH
+
+    for (let h = startH; h <= lastBucketH; h++) {
+      if (!hourSet.has(h)) {
+        hourValues.push(h)
+        hourSet.add(h)
+      }
+    }
+    return { shift, startH, effectiveEndH }
+  })
+
+  // markArea 直接使用小时小数值：hour + min/60（如 7 + 40/60 ≈ 7.667）
+  for (let i = 0; i < shiftMeta.length; i++) {
+    const { shift, startH, effectiveEndH } = shiftMeta[i]
+    markAreaData.push([
+      {
+        xAxis: startH + shift.start_min / 60,
+        itemStyle: { color: shiftBgColors[i % shiftBgColors.length] },
+        label: { show: true, position: 'insideTopLeft', formatter: shift.name,
+          color: 'rgba(180,200,220,0.7)', fontSize: 9 }
+      },
+      { xAxis: effectiveEndH + shift.end_min / 60 }
+    ])
+  }
+
+  // ── 获取有产量数据的设备名称 ──────────────────────────────────
+  const deviceNames = [...new Set(hourlyProduction.value.map(h => h.device_name))]
+
+  const barColors = [
+    ['#00d4ff', '#0088ff'],
+    ['#00ff88', '#00aa55'],
+    ['#ff9800', '#ff5722'],
+    ['#a855f7', '#7c3aed'],
+  ]
+
+  // ── 为每个设备生成柱状系列（value 轴需 [x, y] 格式）─────────
   const seriesData = []
   const legendData = []
-  const colors = [
-    ['#00d4ff', '#0088ff'],  // 蓝色渐变
-    ['#00ff88', '#00aa55'],  // 绿色渐变
-    ['#ff9800', '#ff5722'],  // 橙色渐变
-    ['#a855f7', '#7c3aed'],  // 紫色渐变
-  ]
-  
-  const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
-  
+
   deviceNames.forEach((deviceName, index) => {
-    // 提取该设备每小时的产量
-    const deviceHourlyData = hours.map((hourLabel) => {
-      const hour = parseInt(hourLabel.split(':')[0])
-      const timeSlot = `${today} ${String(hour).padStart(2, '0')}:00:00`
-      
-      const hourData = hourlyProduction.value.find(
-        h => h.device_name === deviceName && h.time_slot === timeSlot
+    const deviceHourlyData = hourValues.map(h => {
+      // 用实际 hour_idx（跨日时 > 23）拼接 time_slot，对应后端 FLOOR(TIMESTAMPDIFF/3600) 的绝对小时
+      const displayH = h % 24
+      const nextDay = h >= 24
+      const dateStr = nextDay
+        ? (() => { const d = new Date(logicalDate); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0] })()
+        : logicalDate
+      const timeSlot = `${dateStr} ${String(displayH).padStart(2, '0')}:00:00`
+      const found = hourlyProduction.value.find(
+        hp => hp.device_name === deviceName && hp.time_slot === timeSlot
       )
-      
-      // 如果没有数据，返回null（断开图表，但保留X轴刻度）
-      if (!hourData || hourData.total_qty === 0) {
-        return null
-      }
-      
-      return hourData.ok_qty || 0
+      if (!found || found.total_qty === 0) return [h, null]
+      return [h, found.ok_qty || 0]
     })
-    
+
     legendData.push(deviceName)
-    
-    const colorIndex = index % colors.length
+    const ci = index % barColors.length
     seriesData.push({
       name: deviceName,
       type: 'bar',
@@ -1444,55 +1650,77 @@ const initProductionChart = () => {
       barWidth: deviceNames.length === 1 ? '50%' : '35%',
       itemStyle: {
         color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          { offset: 0, color: colors[colorIndex][0] },
-          { offset: 1, color: colors[colorIndex][1] }
+          { offset: 0, color: barColors[ci][0] },
+          { offset: 1, color: barColors[ci][1] }
         ])
       },
-      // ✅ 在柱子上方显示数字
       label: {
-        show: true,
-        position: 'top',
-        formatter: (params) => {
-          // 只显示有数据的柱子的数字
-          return params.value != null ? params.value : ''
+        show: true, position: 'top',
+        formatter: p => {
+          const v = Array.isArray(p.value) ? p.value[1] : p.value
+          return v != null ? v : ''
         },
-        color: '#fff',
-        fontSize: 10,
-        fontWeight: 'bold'
+        color: '#fff', fontSize: 10, fontWeight: 'bold'
       },
-      connectNulls: false
+      connectNulls: false,
+      // 仅第一个设备系列挂 markArea（避免重叠）
+      ...(index === 0 ? { markArea: { silent: true, data: markAreaData } } : {})
     })
-    
-    console.log(`📊 ${deviceName} 产量:`, deviceHourlyData)
   })
-  
+
+  // CN: 若无数据，追加一条隐藏 dummy 系列来承载班次背景色。
+  // EN: If no data, add an invisible dummy series to keep shift backgrounds.
+  // JP: データなしの場合は非表示の dummy シリーズで背景色を維持する。
+  const finalSeries = seriesData.length > 0
+    ? seriesData
+    : [{
+        type: 'bar',
+        data: hourValues.map(h => [h, null]),
+        barWidth: 0,
+        silent: true,
+        itemStyle: { opacity: 0 },
+        markArea: { silent: true, data: markAreaData }
+      }]
+
   chart.setOption({
-    animation: false, // 禁用动画
-    grid: { top: 35, right: 25, bottom: 35, left: 45 },
+    animation: false,
+    grid: { top: 19, right: 12, bottom: 18, left: 22 },
     legend: {
-      data: legendData,
-      top: 5,
-      right: 20,
+      data: legendData, top: 5, right: 20,
       textStyle: { color: '#8b9eb5', fontSize: 11 }
     },
     xAxis: {
-      type: 'category',
-      data: hours,
+      type: 'value',
+      min: hourValues[0],
+      max: hourValues[hourValues.length - 1] + 1,
+      interval: (() => { const span = hourValues.length; return span > 16 ? 3 : span > 10 ? 2 : 1 })(),
+      splitLine: { show: false },
+      axisTick: { show: false },
       axisLine: { lineStyle: { color: '#1e3a5f' } },
-      axisLabel: { color: '#6b7f9e', fontSize: 10 }
+      axisLabel: {
+        color: '#6b7f9e', fontSize: 10,
+        showMaxLabel: false,
+        formatter: v => {
+          if (v !== Math.round(v)) return ''
+          return `${String(Math.round(v) % 24).padStart(2, '0')}:00`
+        }
+      }
     },
     yAxis: {
       type: 'value',
       splitLine: { lineStyle: { color: '#1e3a5f' } },
       axisLabel: { color: '#6b7f9e', fontSize: 10 }
     },
-    series: seriesData
+    series: finalSeries
   })
 }
 
 // 初始化质量分布图表 - 使用在产工单数据
 const initQualityCharts = () => {
-  const qualityData = activeOrderQuality.value
+  // CN: 使用当班良品率数据（allShiftsQuality → currentShiftQuality），无数据则显示100%满绿环
+  // EN: Use current-shift quality data; show 100% full green ring when no data.
+  // JP: 当班良品率データを使用。データなしの場合は100%フルグリーン表示。
+  const qualityData = currentShiftQuality.value?.devices || []
   // 取前两台设备（按 device_id 去重后取前两条，防止脏数据导致同一设备重复出现）
   const seen = new Set()
   const deviceList = devices.value.filter(d => {
@@ -1507,7 +1735,7 @@ const initQualityCharts = () => {
     const chart = echarts.init(chartEl)
     charts.push(chart)
 
-    // 优先用在产工单数据匹配设备，找不到则用设备列表里的名称
+    // 优先用当班质量数据匹配设备，找不到则用设备列表里的名称
     const deviceName = deviceList[idx]?.device_name || (idx === 0 ? '一号机' : '二号机')
     const matched = qualityData.find(q => q.device_name === deviceName)
     const total = matched ? (matched.ok_qty || 0) + (matched.ng_qty || 0) : 0
@@ -1545,20 +1773,31 @@ const initQualityCharts = () => {
         ]
       })
     } else {
-      // 无在产工单，显示暂无工单
+      // CN: 当班暂无质量数据，显示100%满绿环（符合需求：无数据=100%良品）
+      // EN: No shift quality data yet — show 100% full green ring per spec.
+      // JP: 当班データ未着時は100%フルグリーン（仕様：データなし=100%良品）。
       chart.setOption({
         animation: false,
+        series: [{
+          type: 'pie',
+          radius: ['40%', '55%'],
+          center: ['50%', '42%'],
+          data: [{ value: 100, name: '合格', itemStyle: { color: '#00ffaa' } }],
+          label: { show: false },
+          emphasis: { scale: false },
+          labelLine: { show: false }
+        }],
         graphic: [
           {
             type: 'text',
             left: 'center',
             top: '38%',
-            style: { text: '暂无工单', fontSize: 14, fill: '#4a5f8a', textAlign: 'center' }
+            style: { text: '100.0%', fontSize: 18, fontWeight: 'bold', fill: '#fff', textAlign: 'center' }
           },
           {
             type: 'text',
             left: 'center',
-            top: '62%',
+            top: '82%',
             style: { text: deviceName, fontSize: 11, fill: '#7b9cc5', textAlign: 'center' }
           }
         ]
@@ -1630,236 +1869,248 @@ const initStaffChart = () => {
   })
 }
 
-// 初始化OEE趋势图表
+// CN: 初始化 OEE 趋势图（按逻辑日班次动态构建 x 轴）
+// EN: Init OEE trend chart with shift-aware x-axis for the current logical day.
+// JP: 論理日シフトに基づく動的x軸でOEEトレンドグラフを初期化する。
+//
+// 核心规则 / Core rules:
+//   1. 只在 x 轴展示已到达（has_arrived=true）的班次时间段
+//   2. 不同班次用不同半透明背景色（markArea）区分
+//   3. 未来时段数据为 null，折线自然断开
+//   4. 最小加载粒度为完整班次（一旦班次开始，该班次全部小时都进 x 轴）
 const initTrendChart = () => {
   if (!trendChart.value) return
   const chart = echarts.init(trendChart.value)
   charts.push(chart)
 
-  // 获取当前时间
   const now = new Date()
-  const currentHour = now.getHours()
-  
-  // ✅ 修改时间轴：7:00 到 17:00（对应实际工作时间 7:40-16:20）
-  // 7:00-8:00 包含 7:40 开始的数据
-  // 16:00-17:00 包含到 16:20 结束的数据
-  const times = []
-  const startHour = 7
-  const endHour = 17
-  
-  for (let i = startHour; i <= endHour; i++) {
-    times.push(`${i}:00`)
-  }
-  
-  // 排除汇总行
-  const hourlyData = hourlyOEE.value.filter(item => !item.time_period || !item.time_period.includes('合计'))
-  
-  console.log('📊 OEE趋势图 - 可用OEE数据:', hourlyData.length, '条')
-  console.log('📊 OEE趋势图 - 设备列表:', [...new Set(hourlyData.map(d => d.device_name))])
-  console.log('📊 OEE趋势图 - 原始数据:', hourlyData)
-  
-  // ✅ 从OEE数据中提取设备#1和设备#2的数据
-  // 区分：未发生的时间（null，断开）vs 已发生但为0（显示0）
-  const machine1 = times.map((timeLabel) => {
-    const hour = parseInt(timeLabel.split(':')[0])
-    
-    // 判断该时间段是否已经开始（例如10:00-11:00的时段，只要当前时间>=10:00就算已发生）
-    const hasHappened = currentHour >= hour
-    
-    const oeeData = hourlyData.find(
-      t => t.device_name === '设备#1' && t.hour === hour
-    )
-    
-    // ✅ 如果时间未发生，返回null（折线断开）
-    if (!hasHappened) {
-      return null
-    }
-    
-    // ✅ 如果时间已发生但没有数据记录，返回null（可能设备未运行）
-    if (!oeeData) {
-      return null
-    }
-    
-    // ✅ 如果有数据记录，返回OEE值（即使是0也显示，因为0是真实值）
-    return oeeData.oee_pct || 0
-  })
-  
-  const machine2 = times.map((timeLabel) => {
-    const hour = parseInt(timeLabel.split(':')[0])
-    
-    // 判断该时间段是否已经开始
-    const hasHappened = currentHour >= hour
-    
-    const oeeData = hourlyData.find(
-      t => t.device_name === '设备#2' && t.hour === hour
-    )
-    
-    // ✅ 如果时间未发生，返回null（折线断开）
-    if (!hasHappened) {
-      return null
-    }
-    
-    // ✅ 如果时间已发生但没有数据记录，返回null
-    if (!oeeData) {
-      return null
-    }
-    
-    // ✅ 如果有数据记录，返回OEE值（即使是0也显示）
-    return oeeData.oee_pct || 0
-  })
-  
-  console.log('📊 OEE趋势图 - 设备#1数据:', machine1)
-  console.log('📊 OEE趋势图 - 设备#2数据:', machine2)
+  // CN: 跨日修正 currentHour：若逻辑日属于昨天（凌晨时刻还在昨天的班次里），
+  //     当前时刻对应的 hour_idx 应为 24 + now.getHours()，否则历史班次数据会被误判为"未来"。
+  // EN: Cross-midnight correction: if logical date is yesterday, add 24 to current hour so
+  //     past data buckets (h=14..23 from yesterday) are not mistakenly treated as future.
+  // JP: 論理日が昨日の場合、currentHour に 24 を加算することで、昨日のバケット（h=14..23）
+  //     が未来として誤判定されるのを防ぐ。
+  const logicalDate = shiftsForDay.value[0]?.logical_date
+  const todayStr = now.toISOString().split('T')[0]
+  const isNextDay = logicalDate && logicalDate < todayStr  // 逻辑日是昨天 → 处于跨日凌晨段
+  const currentHour = isNextDay ? 24 + now.getHours() : now.getHours()
 
-  // 使用固定的设备名称（与OEE数据一致）
-  const legend1 = '设备#1'
-  const legend2 = '设备#2'
-  
+  // 排除汇总行
+  const hourlyData = hourlyOEE.value.filter(
+    item => !item.time_period || !item.time_period.includes('合计')
+  )
+
+  // CN: 顺序前缀：从头扫描，遇到第一个未到达的班次就停止
+  //     避免跳过未到达的中间班次（如班1已结束、班2未开始、班3已开始 → 只显示班1）
+  // EN: Sequential prefix: stop at the first non-arrived shift to prevent skipping gaps.
+  // JP: 順序プレフィックス：最初の未到達シフトで打ち切り、間のシフトを飛ばさない。
+  let lastArrivedIdx = -1
+  for (let i = 0; i < shiftsForDay.value.length; i++) {
+    if (shiftsForDay.value[i].has_arrived) {
+      lastArrivedIdx = i
+    } else {
+      break
+    }
+  }
+  const arrivedShifts = lastArrivedIdx >= 0 ? shiftsForDay.value.slice(0, lastArrivedIdx + 1) : []
+
+  // ─── 今天还没到第一班：显示等待提示 ───────────────────────
+  if (arrivedShifts.length === 0) {
+    chart.setOption({
+      graphic: [{
+        type: 'text',
+        left: 'center',
+        top: 'middle',
+        style: { text: '等待班次开始...', fill: '#6b7f9e', fontSize: 13 }
+      }]
+    })
+    return
+  }
+
+  // ─── 班次配色（科技深色风格）──────────────────────────────
+  // CN: 每个班次使用不同的半透明背景色；颜色数组循环使用
+  // EN: Each shift uses a distinct translucent background; colors cycle if more shifts than colors.
+  const shiftBgColors = [
+    'rgba(0, 210, 130, 0.11)',   // 一班 - 绿
+    'rgba(50, 140, 255, 0.11)',  // 二班 - 蓝
+    'rgba(255, 165, 30, 0.11)',  // 三班 - 橙
+    'rgba(200, 80, 220, 0.11)',  // 四班 - 紫
+    'rgba(0, 210, 220, 0.11)',   // 五班 - 青
+  ]
+
+  // ─── 构建 x 轴和班次 markArea（value 轴 + 小时小数值 = 真正分钟级精度）─
+  // CN: 与今日良品图相同，改用 value 轴。ECharts category 轴的 OrdinalScale.parse()
+  //     对小数做 Math.round() 取整，导致 markArea 分钟精度被抹杀。value 轴的 markArea
+  //     xAxis 直接用小时小数（如 7.667=07:40），真正精确对齐班次分钟边界。
+  // EN: Same as production chart – switched to value axis. Category OrdinalScale.parse()
+  //     rounds fractional values, destroying minute precision. Value axis markArea uses
+  //     hour decimals directly for true minute-level alignment.
+  // JP: 良品グラフと同様にvalue軸に変更。category軸のOrdinalScale.parse()は小数を丸めるため
+  //     分精度が消える。value軸ならmarkAreaのxAxisに時刻小数を直接使用し正確に揃えられる。
+  const hourValues = []
+  const hourSet = new Set()
+  const markAreaData = []
+
+  // 构建 hourValues 数组（整数小时值，供数据映射用）
+  const oeeShiftMeta = arrivedShifts.map(shift => {
+    const startH  = shift.start_hour
+    const endHRaw = shift.end_hour
+    const endM    = shift.end_min
+    const isCrossMidnight = endHRaw < startH || (endHRaw === startH && endM < shift.start_min)
+    const effectiveEndH   = isCrossMidnight ? endHRaw + 24 : endHRaw
+    const lastBucketH     = (endM === 0) ? effectiveEndH - 1 : effectiveEndH
+
+    for (let h = startH; h <= lastBucketH; h++) {
+      if (!hourSet.has(h)) {
+        hourValues.push(h)
+        hourSet.add(h)
+      }
+    }
+    return { shift, startH, effectiveEndH }
+  })
+
+  // markArea 直接使用小时小数值：hour + min/60（如 7 + 40/60 ≈ 7.667）
+  for (let i = 0; i < oeeShiftMeta.length; i++) {
+    const { shift, startH, effectiveEndH } = oeeShiftMeta[i]
+    markAreaData.push([
+      {
+        xAxis: startH + shift.start_min / 60,
+        itemStyle: { color: shiftBgColors[i % shiftBgColors.length] },
+        label: {
+          show: true,
+          position: 'insideTopLeft',
+          formatter: shift.name,
+          color: 'rgba(180,200,220,0.7)',
+          fontSize: 9
+        }
+      },
+      { xAxis: effectiveEndH + shift.end_min / 60 }
+    ])
+  }
+
+  // ─── 映射 OEE 数据到 x 轴 ────────────────────────────────
+  // CN: 直接用整数小时值匹配后端 t.hour（跨日时可 > 23）。
+  //     "未来"判断：h > currentHour。数据格式为 [hour, oee_pct]，供 value 轴使用。
+  // EN: Match hourly data using integer hour values. Future hours appear as null.
+  //     Data format: [hour, oee_pct] for value axis.
+  // JP: 整数時間で後端 t.hour と直接照合。未来のhourはnull。データ形式: [hour, oee_pct]。
+  const mapOEE = (deviceName) => hourValues.map(h => {
+    if (h > currentHour) return null  // 未来时段：折线断开
+    const d = hourlyData.find(t => t.device_name === deviceName && t.hour === h)
+    return d ? (d.oee_pct ?? null) : null
+  })
+
+  const machine1 = mapOEE('设备#1')
+  const machine2 = mapOEE('设备#2')
+
+  // 转换为 [x, y] 格式供 value 轴使用
+  const machine1XY = hourValues.map((h, i) => [h, machine1[i]])
+  const machine2XY = hourValues.map((h, i) => [h, machine2[i]])
+
   chart.setOption({
-    animation: false, // 禁用动画
+    animation: false,
     tooltip: {
       trigger: 'axis',
       backgroundColor: 'rgba(10, 20, 45, 0.95)',
       borderColor: 'rgba(0, 170, 255, 0.5)',
       borderWidth: 1,
-      textStyle: {
-        color: '#fff',
-        fontSize: 12
-      },
-      formatter: function(params) {
-        if (!params || params.length === 0) return ''
-        
-        let result = `<div style="font-weight: bold; margin-bottom: 5px;">${params[0].axisValue}</div>`
-        
-        params.forEach(param => {
-          if (param.value != null) {
-            result += `
-              <div style="margin: 3px 0;">
-                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${param.color};margin-right:5px;"></span>
-                <span>${param.seriesName}: ${param.value.toFixed(1)}%</span>
-              </div>
-            `
+      textStyle: { color: '#fff', fontSize: 12 },
+      formatter(params) {
+        if (!params?.length) return ''
+        const hourVal = params[0].axisValue
+        const label = `${String(Math.round(hourVal) % 24).padStart(2, '0')}:00`
+        let html = `<div style="font-weight:bold;margin-bottom:5px;">${label}</div>`
+        params.forEach(p => {
+          const val = Array.isArray(p.value) ? p.value[1] : p.value
+          if (val != null) {
+            html += `<div style="margin:3px 0;">
+              <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${p.color};margin-right:5px;"></span>
+              <span>${p.seriesName}: ${val.toFixed(1)}%</span>
+            </div>`
           }
         })
-        
-        return result
+        return html
       }
     },
-    grid: { top: 35, right: 35, bottom: 35, left: 45 },
+    grid: { top: 38, right: 18, bottom: 18, left: 22 },
     legend: {
-      data: [legend1, legend2],
-      top: 5,
-      right: 20,
+      data: ['设备#1', '设备#2'],
+      top: 5, right: 20,
       textStyle: { color: '#8b9eb5', fontSize: 11 }
     },
     xAxis: {
-      type: 'category',
-      data: times,
-      boundaryGap: false,
+      type: 'value',
+      min: hourValues[0],
+      max: hourValues[hourValues.length - 1] + 1,
+      interval: (() => { const span = hourValues.length; return span > 16 ? 3 : span > 10 ? 2 : 1 })(),
+      splitLine: { show: false },
+      axisTick: { show: false },
       axisLine: { lineStyle: { color: '#1e3a5f' } },
-      axisLabel: { color: '#6b7f9e', fontSize: 10 }
+      axisLabel: {
+        color: '#6b7f9e', fontSize: 10,
+        showMaxLabel: false,
+        formatter: v => {
+          if (v !== Math.round(v)) return ''
+          return `${String(Math.round(v) % 24).padStart(2, '0')}:00`
+        }
+      }
     },
     yAxis: {
       type: 'value',
-      min: 0,
-      max: 100,
+      min: 0, max: 100,
       splitLine: { lineStyle: { color: '#1e3a5f', type: 'dashed' } },
       axisLabel: { color: '#6b7f9e', fontSize: 10 }
     },
     series: [
       {
-        name: legend1,
+        name: '设备#1',
         type: 'line',
-        data: machine1,
+        data: machine1XY,
         smooth: true,
-        symbol: 'circle',
-        symbolSize: 6,
+        symbol: 'circle', symbolSize: 6,
         lineStyle: { color: '#00ffaa', width: 2 },
         itemStyle: { color: '#00ffaa' },
-        connectNulls: false,  // 不连接null值，让折线断开
+        connectNulls: false,
         markLine: {
           silent: true,
           symbol: 'none',
-          label: {
-            show: true,
-            position: 'end',
-            formatter: 'OEE标准线 75%',
-            color: '#ff9800',
-            fontSize: 10
-          },
-          lineStyle: {
-            color: '#ff9800',
-            type: 'dashed',
-            width: 1
-          },
-          data: [{
-            yAxis: 75,
-            name: 'OEE标准线'
-          }]
-        }
+          label: { show: true, position: 'end', formatter: 'OEE 75%', color: '#ff9800', fontSize: 10 },
+          lineStyle: { color: '#ff9800', type: 'dashed', width: 1 },
+          data: [{ yAxis: 75 }]
+        },
+        markArea: { silent: true, data: markAreaData }
       },
       {
-        name: legend2,
+        name: '设备#2',
         type: 'line',
-        data: machine2,
+        data: machine2XY,
         smooth: true,
-        symbol: 'circle',
-        symbolSize: 6,
+        symbol: 'circle', symbolSize: 6,
         lineStyle: { color: '#3b82f6', width: 2 },
         itemStyle: { color: '#3b82f6' },
-        connectNulls: false  // 不连接null值，让折线断开
+        connectNulls: false
       }
     ]
   })
-  
-  // ✅ 启动tooltip自动循环播放（记住上次位置）
+
+  // ─── tooltip 自动轮播（保留上次位置）────────────────────────
   const autoShowTooltip = () => {
-    // 清除之前的定时器
-    if (trendChartTooltipTimer) {
-      clearInterval(trendChartTooltipTimer)
-    }
-    
+    if (trendChartTooltipTimer) clearInterval(trendChartTooltipTimer)
     trendChartTooltipTimer = setInterval(() => {
-      // 只在有数据的点上显示tooltip
       const validIndices = []
-      times.forEach((time, index) => {
-        if (machine1[index] != null || machine2[index] != null) {
-          validIndices.push(index)
-        }
+      hourValues.forEach((_, i) => {
+        if (machine1[i] != null || machine2[i] != null) validIndices.push(i)
       })
-      
-      if (validIndices.length === 0) return
-      
-      // ✅ 使用全局变量记住位置，循环显示
-      if (trendChartTooltipIndex >= validIndices.length) {
-        trendChartTooltipIndex = 0
-      }
-      
-      chart.dispatchAction({
-        type: 'showTip',
-        seriesIndex: 0,
-        dataIndex: validIndices[trendChartTooltipIndex]
-      })
-      
+      if (!validIndices.length) return
+      if (trendChartTooltipIndex >= validIndices.length) trendChartTooltipIndex = 0
+      chart.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: validIndices[trendChartTooltipIndex] })
       trendChartTooltipIndex++
-    }, 3000) // 每3秒切换一次
+    }, 3000)
   }
-  
-  // 启动自动播放
+
   autoShowTooltip()
-  
-  // 鼠标悬停时暂停自动播放
-  chart.on('mouseover', () => {
-    if (trendChartTooltipTimer) {
-      clearInterval(trendChartTooltipTimer)
-      trendChartTooltipTimer = null
-    }
-  })
-  
-  // 鼠标离开时恢复自动播放
-  chart.on('mouseout', () => {
-    autoShowTooltip()
-  })
+  chart.on('mouseover', () => { if (trendChartTooltipTimer) { clearInterval(trendChartTooltipTimer); trendChartTooltipTimer = null } })
+  chart.on('mouseout', () => { autoShowTooltip() })
 }
 
 const updateCharts = () => {
@@ -2042,6 +2293,11 @@ onUnmounted(() => {
   gap: 1vw;
   margin-bottom: 1.5vh;
   flex-shrink: 0;
+  /* CN: 锁定卡片行高度占视口14%，防止班次历史行将整行撑高
+     EN: Cap the KPI row at 14 vh so shift-history rows cannot push the row taller.
+     JP: シフト履歴行による行拡張を防ぐため、KPIカード行高を14vhに固定。 */
+  height: 14vh;
+  align-items: stretch;
 }
 
 .kpi-card {
@@ -2049,9 +2305,14 @@ onUnmounted(() => {
   border: 1px solid rgba(0, 170, 255, 0.25);
   border-radius: 0.8vw;
   padding: 1.2vh 1vw;
+  /* CN: flex 列布局，历史班次块通过 margin-top:auto 固定在底部，消除卡片间视觉高低不齐
+     EN: Flex column keeps main content top-aligned; shift-history is pushed to the bottom via margin-top:auto.
+     JP: flex列でメインコンテンツを上揃え、シフト履歴はmargin-top:autoで底部に固定しカード間の高さ不揃いを解消。 */
+  display: flex;
+  flex-direction: column;
   position: relative;
   overflow: hidden;
-  padding-bottom: 3.5vh;
+  padding-bottom: 2.8vh;
 }
 
 .kpi-card::before {
@@ -2111,7 +2372,10 @@ onUnmounted(() => {
 .kpi-dual-label {
   font-size: clamp(9px, 0.7vw, 11px);
   color: #7b9cc5;
-  margin-bottom: 0.5vh;
+  /* CN: 数值下方的设备标签，移到值后确保大数值与其他卡片顶部对齐
+     EN: Device sub-label now below the value so big numbers align to the same row across all cards.
+     JP: 数値の下に移動したデバイスサブラベル。全カードの大数値が同じ高さに揃う。 */
+  margin-top: 2px;
 }
 
 .kpi-dual-value {
@@ -2160,16 +2424,23 @@ onUnmounted(() => {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 30%;
+  /* CN: 高度缩至 24%，为底部历史班次文字留出不遮挡的空间
+     EN: Reduced to 24% height so the decorative sparkline does not obscure shift-history text.
+     JP: 高さ24%に縮小し、シフト履歴テキストへの重なりを軽減。 */
+  height: 24%;
   opacity: 0.3;
   pointer-events: none;
 }
 
 .kpi-device-quality {
   display: flex;
-  flex-direction: column;
-  gap: 0.15vw;
-  margin-top: 0.2vw;
+  /* CN: 设备行改为横排，两台设备并列一行，减少卡片内容行数
+     EN: Device rows laid out in a single horizontal line to reduce row count and visual crowding.
+     JP: デバイス行を横並びにしてカードの行数を減らし、視覚的な詰め込みを解消。 */
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0 0.8vw;
+  margin-top: 0.2vh;
   position: relative;
   z-index: 1;
 }
@@ -2178,6 +2449,26 @@ onUnmounted(() => {
   font-size: clamp(9px, 0.65vw, 11px);
   color: #7b9cc5;
   line-height: 1.3;
+}
+
+/* CN: 当班历史班次小字区块，用 margin-top:auto 在 flex 列中始终贴卡片底部
+   EN: Past-shift history block; margin-top:auto in flex column pins it to the card bottom.
+   JP: シフト履歴ブロック。flex列内でmargin-top:autoにより常にカード底部へ配置。 */
+.kpi-shift-history {
+  padding: 2px 8px 0;
+  border-top: 1px solid rgba(100, 140, 200, 0.15);
+  margin-top: auto;
+  position: relative;
+  z-index: 2;
+}
+
+.kpi-shift-row {
+  font-size: 10px;
+  color: #5b7a9d;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 主内容区域 */

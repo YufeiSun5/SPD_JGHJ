@@ -67,22 +67,33 @@
       </div>
     </div>
 
-    <!-- 筛选与设置栏 -->
+    <!-- 工单及不良品记录 -->
     <div class="card">
       <div class="card-header">
-        <h3><i class="fas fa-filter"></i> 筛选条件与设置</h3>
-        <button 
-          class="action-btn-mini secondary" 
-          @click="showSettings = !showSettings"
-          title="显示/隐藏高级设置"
-        >
-          <i :class="showSettings ? 'fas fa-eye-slash' : 'fas fa-cog'"></i>
-          {{ showSettings ? '隐藏设置' : '高级设置' }}
-        </button>
+        <h3>
+          <i class="fas fa-table"></i> 工单及不良品记录
+          <span class="badge-count">{{ orders.length }} 条</span>
+        </h3>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button 
+            class="action-btn-mini secondary" 
+            @click="showSettings = !showSettings"
+            title="显示/隐藏高级设置"
+          >
+            <i :class="showSettings ? 'fas fa-eye-slash' : 'fas fa-cog'"></i>
+            {{ showSettings ? '隐藏设置' : '高级设置' }}
+          </button>
+          <button 
+            class="action-btn success"
+            @click="exportData" 
+            :disabled="orders.length === 0"
+          >
+            <i class="fas fa-file-excel"></i> 导出CSV
+          </button>
+        </div>
       </div>
-      <div class="card-content">
-        <!-- 筛选条件 -->
-        <div class="filter-row">
+      <!-- 筛选条件 -->
+      <div class="filter-row">
           <div class="filter-group">
             <label><i class="fas fa-calendar-alt"></i> 时间范围：</label>
             <div class="custom-select">
@@ -154,25 +165,7 @@
             <span>性能稼动率 = 理论时间 / 实际时间 × 100%，理论时间 = 节拍 × 良品数</span>
           </div>
         </div>
-      </div>
-    </div>
 
-    <!-- 数据表格卡片 -->
-    <div class="card">
-      <div class="card-header">
-        <h3>
-          <i class="fas fa-table"></i> 工单列表
-          <span class="badge-count">{{ orders.length }} 条</span>
-        </h3>
-        <button 
-          class="action-btn success"
-          @click="exportData" 
-          :disabled="orders.length === 0"
-        >
-          <i class="fas fa-file-excel"></i> 导出CSV
-        </button>
-      </div>
-      
       <div class="table-container">
         <table class="data-table">
           <thead>
@@ -399,8 +392,11 @@ const calculateQualityRate = (order) => {
 }
 
 // 计算性能稼动率
+// CN: 性能稼动率 = 总产量(含NG) × 理论节拍 / 实际运行时间，分子用 actual_qty 而非 ok_qty
+// EN: Performance Rate = total_qty × cycle_time / actual_run_time; use actual_qty (not ok_qty) as numerator
+// JP: 性能稼動率 = 総生産数(NG含む) × 理論タクト / 実運転時間。分子は actual_qty を使う
 const calculateEfficiency = (order) => {
-  if (order.ok_qty === 0) return 0
+  if (order.actual_qty === 0) return 0
   
   // 使用累计用时 + 当前段用时
   let actualSeconds = order.used_seconds || 0
@@ -414,7 +410,7 @@ const calculateEfficiency = (order) => {
   
   if (actualSeconds <= 0) return 0
   
-  const theoreticalSeconds = order.ok_qty * productionCoefficient.value // 理论时间（秒）
+  const theoreticalSeconds = order.actual_qty * productionCoefficient.value // 理论时间（秒）= 总产量 × 节拍
   const efficiency = (theoreticalSeconds / actualSeconds) * 100
   
   return Math.round(efficiency)
@@ -664,9 +660,9 @@ const viewOrder = (order) => {
   }
   const actualTime = formatSecondsToMinutes(actualSeconds)
   
-  // 计算理论时间
-  const theoreticalTime = order.ok_qty > 0 
-    ? (order.ok_qty * productionCoefficient.value / 60).toFixed(2) 
+  // 计算理论时间（总产量 × 节拍）
+  const theoreticalTime = order.actual_qty > 0 
+    ? (order.actual_qty * productionCoefficient.value / 60).toFixed(2) 
     : '-'
   
   confirmDialog.value = {
@@ -825,8 +821,8 @@ const exportData = () => {
       }
       const actualTime = formatSecondsToMinutes(actualSeconds)
       
-      const theoreticalTime = order.ok_qty > 0 
-        ? (order.ok_qty * productionCoefficient.value / 60).toFixed(2) 
+      const theoreticalTime = order.actual_qty > 0 
+        ? (order.actual_qty * productionCoefficient.value / 60).toFixed(2) 
         : '-'
       
       const values = [
@@ -1041,16 +1037,14 @@ onMounted(async () => {
   margin-left: 8px;
 }
 
-.card-content {
-  padding: 24px;
-}
-
 /* 筛选行 */
 .filter-row {
   display: flex;
   align-items: center;
   gap: 20px;
   flex-wrap: wrap;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
 }
 
 .filter-group {
@@ -1125,8 +1119,8 @@ onMounted(async () => {
 
 /* 高级设置区域 */
 .advanced-settings {
-  margin-top: 20px;
-  padding-top: 20px;
+  margin-top: 0;
+  padding: 16px 24px 8px;
   animation: slideDown 0.3s ease-out;
 }
 

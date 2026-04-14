@@ -9,12 +9,17 @@ import (
 // ========================================================
 
 // SysDevice 设备表（映射到已有的 sys_devices 表）
+// CN: shift_id 多对一关联 sys_shifts：多台设备可共用同一班次，一台设备只能属于一个班次（NULL 表示未分配）。
+// EN: shift_id is a many-to-one FK to sys_shifts: many devices may share one shift, one device at most one shift.
+// JP: shift_id は sys_shifts への多対一 FK。複数設備が同一シフトを共有可能、1設備は最大1シフト（NULL=未割当）。
 type SysDevice struct {
-	ID          int     `gorm:"primaryKey;autoIncrement" json:"id"`
-	GatewayID   int     `gorm:"column:gateway_id" json:"gateway_id"`
-	DeviceCode  string  `gorm:"column:device_code;type:varchar(50)" json:"device_code"`
-	DeviceName  string  `gorm:"column:device_name;type:varchar(100)" json:"device_name"`
-	IdentifyKey *string `gorm:"column:identify_key;type:varchar(50)" json:"identify_key"`
+	ID          int      `gorm:"primaryKey;autoIncrement" json:"id"`
+	GatewayID   int      `gorm:"column:gateway_id" json:"gateway_id"`
+	DeviceCode  string   `gorm:"column:device_code;type:varchar(50)" json:"device_code"`
+	DeviceName  string   `gorm:"column:device_name;type:varchar(100)" json:"device_name"`
+	IdentifyKey *string  `gorm:"column:identify_key;type:varchar(50)" json:"identify_key"`
+	ScheduleID  *int     `gorm:"column:schedule_id;comment:关联时间安排组ID（多对一，NULL=未分配）" json:"schedule_id"`
+	CycleTime   *float64 `gorm:"column:cycle_time;comment:理论节拍（秒/件），NULL=使用全局默认" json:"cycle_time"`
 }
 
 func (SysDevice) TableName() string {
@@ -323,3 +328,103 @@ type DeviceStatusQueryRequest struct {
 	StartTime *time.Time `form:"start_time"`
 	EndTime   *time.Time `form:"end_time"`
 }
+
+// ========================================================
+// 班次时间配置表（sys_shifts / sys_shift_breaks）
+// Shift Time Configuration Tables
+// シフト時間設定テーブル
+// ========================================================
+
+// SysShiftSchedule 时间安排组（包含多个班次，设备关联的是"组"而非单个班次）
+// A schedule group contains multiple shifts; devices are assigned to a schedule, not to a single shift.
+// スケジュールグループは複数のシフトを含む。設備は個別シフトではなくグループに紐づける。
+type SysShiftSchedule struct {
+	ID        int    `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name      string `gorm:"type:varchar(100);not null;comment:时间安排名称（如：三班制）" json:"name"`
+	SortOrder int    `gorm:"not null;default:0;comment:排序序号" json:"sort_order"`
+	IsActive  bool   `gorm:"not null;default:true;comment:是否启用" json:"is_active"`
+	// Shifts 通过外键关联，调用 DB.Preload("Shifts") 时自动填充
+	Shifts []SysShift `gorm:"foreignKey:ScheduleID;constraint:OnDelete:CASCADE" json:"shifts,omitempty"`
+}
+
+func (SysShiftSchedule) TableName() string { return "sys_shift_schedules" }
+
+// SysShift 班次时间配置（归属于某个时间安排组）
+// Each shift belongs to one schedule group and defines a work window with break periods.
+// 各シフトは1つのスケジュールグループに属し、作業時間帯と休憩時間帯を定義する。
+type SysShift struct {
+	ID         int             `gorm:"primaryKey;autoIncrement" json:"id"`
+	ScheduleID int             `gorm:"not null;default:0;index;comment:所属时间安排组ID" json:"schedule_id"`
+	Name       string          `gorm:"type:varchar(100);not null;comment:班次名称（如：早班、晚班）" json:"name"`
+	StartHour  int8            `gorm:"not null;default:7;comment:班次开始小时(0-23)" json:"start_hour"`
+	StartMin   int8            `gorm:"not null;default:40;comment:班次开始分钟(0-59)" json:"start_min"`
+	EndHour    int8            `gorm:"not null;default:16;comment:班次结束小时(0-23)" json:"end_hour"`
+	EndMin     int8            `gorm:"not null;default:20;comment:班次结束分钟(0-59)" json:"end_min"`
+	IsActive   bool            `gorm:"not null;default:true;comment:是否启用" json:"is_active"`
+	SortOrder  int             `gorm:"not null;default:0;comment:组内排序序号（升序展示）" json:"sort_order"`
+	CreatedAt  time.Time       `gorm:"autoCreateTime" json:"created_at"`
+	Breaks     []SysShiftBreak `gorm:"foreignKey:ShiftID;constraint:OnDelete:CASCADE" json:"breaks,omitempty"`
+}
+
+func (SysShift) TableName() string { return "sys_shifts" }
+
+// SysShiftBreak 班次内休息时间段配置
+// A shift can have multiple break periods (e.g. morning tea, lunch, afternoon tea).
+// 1シフトに複数の休憩時間帯を設定できる。
+type SysShiftBreak struct {
+	ID        int    `gorm:"primaryKey;autoIncrement" json:"id"`
+	ShiftID   int    `gorm:"not null;index;comment:所属班次ID" json:"shift_id"`
+	Name      string `gorm:"type:varchar(100);not null;comment:休息名称（如：午餐休息）" json:"name"`
+	StartHour int8   `gorm:"not null;comment:休息开始小时(0-23)" json:"start_hour"`
+	StartMin  int8   `gorm:"not null;comment:休息开始分钟(0-59)" json:"start_min"`
+	EndHour   int8   `gorm:"not null;comment:休息结束小时(0-23)" json:"end_hour"`
+	EndMin    int8   `gorm:"not null;comment:休息结束分钟(0-59)" json:"end_min"`
+}
+
+func (SysShiftBreak) TableName() string { return "sys_shift_breaks" }
+
+// ========================================================
+// 班次生产快照表（pro_shift_snapshots）
+// CN: 每个班次结束时自动生成，含当时的班次/CT/休息/人员配置快照和产量/设备运行统计。
+// EN: Auto-generated at shift end; contains configuration snapshot and production/device stats.
+// JP: シフト終了時に自動生成。班次/CT/休憩/人員設定のスナップショットと生産・設備稼働統計を含む。
+// ========================================================
+
+type ProShiftSnapshot struct {
+	ID int64 `gorm:"primaryKey;autoIncrement" json:"id"`
+	// CN: 唯一联合索引：同一逻辑日 + 同一设备 + 同一班次，只允许存在一条快照记录。
+	// EN: Unique composite index: only one snapshot per logical-date × device × shift.
+	// JP: ユニーク複合インデックス：論理日 × 設備 × シフトごとにスナップショットは1件のみ許可。
+	SnapshotDate   string    `gorm:"type:date;not null;uniqueIndex:udx_snap_date_dev_shift;comment:逻辑日期" json:"snapshot_date"`
+	DeviceID       int       `gorm:"not null;uniqueIndex:udx_snap_date_dev_shift;comment:设备ID" json:"device_id"`
+	DeviceName     string    `gorm:"type:varchar(100);not null;comment:设备名称快照" json:"device_name"`
+	ScheduleID     int       `gorm:"not null;comment:时间安排组ID" json:"schedule_id"`
+	ShiftID        int       `gorm:"not null;uniqueIndex:udx_snap_date_dev_shift;comment:班次ID" json:"shift_id"`
+	ShiftName      string    `gorm:"type:varchar(100);not null;comment:班次名称快照" json:"shift_name"`
+	ShiftStart     time.Time `gorm:"not null;comment:班次实际起始时刻" json:"shift_start"`
+	ShiftEnd       time.Time `gorm:"not null;comment:班次实际结束时刻" json:"shift_end"`
+	BreakConfig    string    `gorm:"type:json;comment:休息时间配置快照" json:"break_config"`
+	CycleTime      float64   `gorm:"not null;default:0;comment:当时的CT（秒/件）" json:"cycle_time"`
+	PlanWorkSec    int       `gorm:"not null;default:0;comment:理论工作秒数（班次时长-休息时长）" json:"plan_work_sec"`
+	TotalQty       int       `gorm:"default:0;comment:总产量" json:"total_qty"`
+	OkQty          int       `gorm:"default:0;comment:良品数" json:"ok_qty"`
+	NgQty          int       `gorm:"default:0;comment:不良品数" json:"ng_qty"`
+	DeviceRunSec   int       `gorm:"default:0;comment:设备运行秒数" json:"device_run_sec"`
+	DeviceIdleSec  int       `gorm:"default:0;comment:设备空闲秒数" json:"device_idle_sec"`
+	DeviceFaultSec int       `gorm:"default:0;comment:设备故障秒数" json:"device_fault_sec"`
+	TeamID         *int      `gorm:"index:idx_snap_team;comment:班组ID" json:"team_id"`
+	TeamName       string    `gorm:"type:varchar(100);comment:班组名称快照" json:"team_name"`
+	StaffSnapshot  string    `gorm:"type:json;comment:人员快照 [{id,name,code},...]" json:"staff_snapshot"`
+	AvailPct       float64   `gorm:"default:0;comment:时间稼动率(%)" json:"availability_pct"`
+	PerfPct        float64   `gorm:"default:0;comment:性能稼动率(%)" json:"performance_pct"`
+	QualityPct     float64   `gorm:"default:0;comment:直通率(%)" json:"quality_pct"`
+	OeePct         float64   `gorm:"default:0;comment:OEE(%)" json:"oee_pct"`
+	SessionID      *int64    `gorm:"comment:关联的machine_session ID" json:"session_id"`
+	// CN: 多 session 工时拆分明细 JSON，格式见 SessionSnapshotItem；旧记录为 NULL → 前端降级展示。
+	// EN: Per-session overlap-time breakdown JSON (see SessionSnapshotItem); NULL on legacy rows → graceful degradation.
+	// JP: 複数セッションの工時拆分明細 JSON（SessionSnapshotItem参照）。旧レコードは NULL → フロントで降格表示。
+	SessionsSnapshot string    `gorm:"type:json;comment:多session工时拆分明细JSON" json:"sessions_snapshot"`
+	CreatedAt        time.Time `gorm:"autoCreateTime" json:"created_at"`
+}
+
+func (ProShiftSnapshot) TableName() string { return "pro_shift_snapshots" }

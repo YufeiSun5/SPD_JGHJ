@@ -124,15 +124,25 @@
       </div>
     </div>
 
-    <!-- 今日OEE逐小时明细 -->
-    <div class="section-card">
+    <!-- 今日OEE逐小时明细（按班次分组） -->
+    <div
+      v-for="group in shiftGroups"
+      :key="group.shift_id"
+      class="section-card"
+    >
       <div class="section-header">
-        <span><i class="fas fa-table"></i> 今日OEE逐小时明细</span>
+        <span>
+          <i class="fas fa-clock"></i>
+          {{ group.shift_name }}
+          <span class="shift-range">{{ group.shift_range }}</span>
+          <span v-if="group.is_current" class="badge-current">当前班次</span>
+          <span v-else-if="!group.has_arrived" class="badge-pending">未开始</span>
+        </span>
         <span v-if="oeeError" class="error-hint">{{ oeeError }}</span>
       </div>
       <div class="section-body">
         <div v-if="oeeLoading" class="empty-hint">查询中...</div>
-        <div v-else-if="oeeRows.length === 0" class="empty-hint">暂无数据</div>
+        <div v-else-if="!group.rows || group.rows.length === 0" class="empty-hint">暂无数据</div>
         <table v-else class="data-table oee-table">
           <thead>
             <tr>
@@ -151,9 +161,9 @@
           </thead>
           <tbody>
             <tr
-              v-for="(row, i) in oeeRows"
+              v-for="(row, i) in group.rows"
               :key="i"
-              :class="{ 'summary-row': row.time_period === '合计' || row.time_period === '=== 全天合计 ===' }"
+              :class="{ 'summary-row': row.time_period === '合计' || (row.time_period && row.time_period.includes('合计')) }"
             >
               <td>{{ row.time_period }}</td>
               <td>{{ row.device_name }}</td>
@@ -181,15 +191,38 @@ import { ref, computed, onMounted } from 'vue'
 const loading = ref(false)
 const oeeLoading = ref(false)
 const oeeError = ref('')
-const oeeRows = ref([])
+const shiftGroups = ref([])   // 按班次分组的 OEE 数据
 const monthlyQuality = ref([])
 const dailyQuality = ref([])
 
-// 今日合计行（过滤出合计行）
+// 今日合计行：从所有班次的合计行汇总（取各班次最后一行 time_period 含"合计"的行）
 const todaySummaryRows = computed(() => {
-  return oeeRows.value.filter(r =>
-    r.time_period === '合计' || (r.time_period && r.time_period.includes('合计'))
-  )
+  const summaryMap = {}
+  for (const group of shiftGroups.value) {
+    const rows = group.rows || []
+    const summaryRow = rows.find(r => r.time_period && r.time_period.includes('合计'))
+    if (summaryRow) {
+      const key = summaryRow.device_name
+      if (!summaryMap[key]) {
+        summaryMap[key] = { ...summaryRow, _shift: group.shift_name }
+      }
+    }
+  }
+  // 如果只有一个班次，直接用其合计行（含全部设备）
+  if (shiftGroups.value.length <= 1) {
+    return Object.values(summaryMap)
+  }
+  // 多班次：取全量合计（最后一个班次的合计行通常是全天合计，若后端按逻辑日合并）
+  // 这里直接展示各班次的班次合计，不再跨班次汇总（调试用途，粒度更细）
+  const results = []
+  for (const group of shiftGroups.value) {
+    const rows = group.rows || []
+    const summaryRow = rows.find(r => r.time_period && r.time_period.includes('合计'))
+    if (summaryRow) {
+      results.push({ ...summaryRow, device_name: `${group.shift_name} - ${summaryRow.device_name}` })
+    }
+  }
+  return results
 })
 
 // 本月良品率汇总计算
@@ -206,9 +239,9 @@ const loadOEE = async () => {
   oeeLoading.value = true
   oeeError.value = ''
   try {
-    if (window.go?.main?.App?.DebugOEEDirect) {
-      const result = await window.go.main.App.DebugOEEDirect()
-      oeeRows.value = result?.rows || []
+    if (window.go?.main?.App?.DebugOEEByShift) {
+      const result = await window.go.main.App.DebugOEEByShift()
+      shiftGroups.value = result || []
     }
   } catch (e) {
     oeeError.value = '查询失败: ' + e
@@ -436,4 +469,36 @@ onMounted(() => {
 .ok { color: #4ade80 !important; }
 .warn { color: #ff6b6b !important; font-weight: 600; }
 .primary { color: #00aaff !important; }
+
+/* 班次标签 */
+.shift-range {
+  font-size: 12px;
+  color: rgba(255,255,255,0.45);
+  font-weight: 400;
+  margin-left: 8px;
+}
+
+.badge-current {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(74,222,128,0.18);
+  color: #4ade80;
+  border: 1px solid rgba(74,222,128,0.35);
+}
+
+.badge-pending {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 400;
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.35);
+  border: 1px solid rgba(255,255,255,0.12);
+}
 </style>

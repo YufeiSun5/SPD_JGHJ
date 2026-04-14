@@ -107,6 +107,7 @@ const mainMenuItems = [
   { key: 'alarm', label: '报警管理', icon: 'fas fa-bell' },
   { key: 'quality', label: '不良品管理', icon: 'fas fa-exclamation-triangle' },
   { key: 'history', label: '历史查询', icon: 'fas fa-history' },
+  { key: 'shiftReport', label: '班次追溯', icon: 'fas fa-clipboard-check' },
   { key: 'assistant', label: '智能助手', icon: 'fas fa-robot' }
 ]
 

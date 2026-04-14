@@ -350,17 +350,16 @@ onMounted(async () => {
   right: 0;
   bottom: 0;
   background: rgba(0,0,0,0.7);
-  backdrop-filter: blur(5px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  animation: fadeIn 0.3s;
 }
 
 .modal-container {
-  background: rgba(20, 30, 48, 0.98);
-  border-radius: 16px;
+  background: rgba(30, 40, 60, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 12px;
   border: 1px solid rgba(255,255,255,0.1);
   width: 95%;
   max-width: 1200px;
@@ -368,18 +367,6 @@ onMounted(async () => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-  animation: slideUp 0.3s;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(30px); }
-  to { opacity: 1; transform: translateY(0); }
 }
 
 .modal-header {
@@ -388,7 +375,6 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: linear-gradient(135deg, rgba(52, 152, 219, 0.1) 0%, rgba(41, 128, 185, 0.1) 100%);
 }
 
 .modal-header h3 {
@@ -401,21 +387,16 @@ onMounted(async () => {
 }
 
 .modal-close {
-  width: 32px;
-  height: 32px;
   border: none;
-  background: rgba(255,255,255,0.1);
-  border-radius: 8px;
-  color: rgba(255,255,255,0.7);
+  background: none;
+  color: rgba(255,255,255,0.6);
+  font-size: 20px;
   cursor: pointer;
+  padding: 4px 8px;
   transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .modal-close:hover {
-  background: rgba(255,255,255,0.2);
   color: #fff;
 }
 

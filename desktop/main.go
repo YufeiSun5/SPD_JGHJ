@@ -3,6 +3,8 @@ package main
 import (
 	"embed"
 	"log"
+	"net"
+	"os"
 	"time"
 
 	"gin-mqtt-pgsql/config"
@@ -23,6 +25,21 @@ var assets embed.FS
 func main() {
 	log.Println("🚀 启动 IIoT 桌面监控客户端...")
 
+	// ── 单实例锁（Single-instance lock / シングルインスタンスロック） ──────────────
+	// CN: 尝试监听本机固定端口；若端口已被占用，说明另一实例正在运行，直接退出。
+	//     使用 TCP 端口（而非文件锁）可避免进程崩溃后锁文件残留的问题。
+	// EN: Bind to a fixed local port; if already in use, another instance is running → exit.
+	//     TCP port avoids stale lock-file issues after a crash.
+	// JP: 固定ローカルポートをバインド。既に使用中なら別インスタンスが起動中 → 終了。
+	//     TCP ポートはクラッシュ後のロックファイル残留問題を回避できる。
+	const singleInstanceAddr = "127.0.0.1:47391"
+	sil, err := net.Listen("tcp", singleInstanceAddr)
+	if err != nil {
+		log.Printf("⚠️  检测到程序已有一个实例在运行（%s 已被占用），禁止重复启动，本进程退出。", singleInstanceAddr)
+		os.Exit(1)
+	}
+	defer sil.Close()
+
 	// 初始化后端系统
 	initBackend()
 
@@ -31,7 +48,7 @@ func main() {
 
 	log.Println("📦 准备启动 Wails 窗口...")
 
-	err := wails.Run(&options.App{
+	err = wails.Run(&options.App{
 		Title:     "IIoT 网关监控",
 		Width:     1440,
 		Height:    800,
@@ -77,6 +94,13 @@ func initBackend() {
 		core.GetTagManager().LoadTags([]*models.Tag{}) // 空测点列表
 		log.Println("✅ 离线模式已就绪（无数据）")
 		return
+	}
+
+	// 自动建表 / 补全缺失字段（幂等，已存在的表不会被破坏）
+	// Auto-migrate all MES tables on startup; idempotent, existing tables are not dropped.
+	// 起動時に全MESTテーブルを自動マイグレーション。冪等処理で既存テーブルは保持。
+	if err := database.InitMESDatabase(); err != nil {
+		log.Printf("⚠️ 数据库表结构初始化失败: %v", err)
 	}
 
 	core.InitChannels()

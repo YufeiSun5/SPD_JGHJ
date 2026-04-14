@@ -108,15 +108,16 @@ const mainMenuItems = [
   { key: 'alarm', label: '报警管理', icon: 'fas fa-bell' },
   { key: 'quality', label: '不良品管理', icon: 'fas fa-exclamation-triangle' },
   { key: 'history', label: '历史查询', icon: 'fas fa-history' },
-  { key: 'assistant', label: '智能助手', icon: 'fas fa-robot' }
+  { key: 'shiftReport', label: '班次追溯', icon: 'fas fa-clipboard-check' },
+  { key: 'assistant', label: '智能助手', icon: 'fas fa-robot' },
+  { key: 'dashboard', label: '数据概览', icon: 'fas fa-chart-line' },
+  { key: 'oeeDebug', label: 'OEE调试', icon: 'fas fa-calculator' },
+  { key: 'settings', label: '参数配置', icon: 'fas fa-sliders-h' }
 ]
 
 const systemMenuItems = [
-  { key: 'dashboard', label: '数据概览', icon: 'fas fa-chart-line', requireAuth: true },
   { key: 'config', label: '采集配置', icon: 'fas fa-wrench', requireAuth: true },
-  { key: 'tasks', label: '任务管理', icon: 'fas fa-tasks', requireAuth: true },
-  { key: 'oeeDebug', label: 'OEE调试', icon: 'fas fa-calculator', requireAuth: true },
-  { key: 'settings', label: '参数配置', icon: 'fas fa-sliders-h', requireAuth: false }
+  { key: 'tasks', label: '任务管理', icon: 'fas fa-tasks', requireAuth: true }
 ]
 
 // 根据认证状态过滤菜单项

@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "noImplicitAny": false,
+    "noImplicitThis": false,
+    "strict": false,
+    "strictNullChecks": false,
+    "checkJs": false
+  },
+  "include": ["**/*.js", "**/*.ts"],
+  "exclude": ["../../../node_modules"]
+}

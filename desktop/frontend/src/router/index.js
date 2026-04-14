@@ -65,6 +65,11 @@ const router = createRouter({
       component: () => import('../views/SystemSettings.vue')
     },
     {
+      path: '/shift-report',
+      name: 'shiftReport',
+      component: () => import('../views/ShiftReport.vue')
+    },
+    {
       path: '/oee-debug',
       name: 'oeeDebug',
       component: () => import('../views/OEEDebug.vue')

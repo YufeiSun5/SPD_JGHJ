@@ -325,7 +325,7 @@
                   <p>暂无计划数据</p>
                 </td>
               </tr>
-              <tr v-for="(plan, index) in filteredPlans.slice(0, 3)" :key="plan.id">
+              <tr v-for="(plan, index) in filteredPlans" :key="plan.id">
                 <td>{{ index + 1 }}</td>
                 <td>
                   <span class="plan-code">{{ plan.order_no }}</span>
@@ -446,7 +446,7 @@
                   <p>暂无任务数据</p>
                 </td>
               </tr>
-              <tr v-for="(task, index) in tasks.slice(0, 3)" :key="task.id">
+              <tr v-for="(task, index) in tasks" :key="task.id">
                 <td>{{ index + 1 }}</td>
                 <td>
                   <span class="task-code">{{ task.order_no }}</span>
@@ -705,38 +705,29 @@ const energyData = computed(() => {
   }))
 })
 
-// 过滤工单：只显示未完工和完工一天内的
+// 过滤工单：优先显示所有未完成工单，全部完成才显示最近3条完工工单
+// CN: 未完成（待产/生产中/暂停）全部显示；全部完工时按时间倒序取最近3条
+// EN: Show all uncompleted orders; if all done, show the 3 most recent completed
+// JP: 未完了（待機/生産中/一時停止）は全て表示；全完了時は直近3件を表示
 const filteredPlans = computed(() => {
-  const now = new Date()
-  const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000) // 24小时前
-  
-  return plans.value.filter(order => {
-    // 状态 0=待产, 1=生产中, 2=暂停, 3=完工, 4=关闭
-    
-    // 未完工的（待产、生产中、暂停）直接显示
-    if (order.status === 0 || order.status === 1 || order.status === 2) {
-      return true
-    }
-    
-    // 完工的，检查完工时间（使用 end_time 字段）
-    if (order.status === 3) {
-      // 如果有 end_time 字段，使用它判断
-      if (order.end_time) {
-        const endTime = new Date(order.end_time)
-        return endTime >= oneDayAgo
-      }
-      // 如果没有 end_time，使用 created_at 判断（兜底逻辑）
-      if (order.created_at) {
-        const createdTime = new Date(order.created_at)
-        return createdTime >= oneDayAgo
-      }
-      // 如果都没有时间字段，默认不显示完工的
-      return false
-    }
-    
-    // 关闭状态的不显示
-    return false
-  })
+  // 状态 0=待产, 1=生产中, 2=暂停, 3=完工, 4=关闭
+  const uncompleted = plans.value.filter(
+    order => order.status === 0 || order.status === 1 || order.status === 2
+  )
+
+  if (uncompleted.length > 0) {
+    return uncompleted
+  }
+
+  // 全部完成 → 按完工时间倒序取最近3条
+  return plans.value
+    .filter(order => order.status === 3)
+    .sort((a, b) => {
+      const timeA = new Date(a.end_time || a.created_at || 0)
+      const timeB = new Date(b.end_time || b.created_at || 0)
+      return timeB - timeA
+    })
+    .slice(0, 3)
 })
 
 // 任务数据（基于过滤后的工单）

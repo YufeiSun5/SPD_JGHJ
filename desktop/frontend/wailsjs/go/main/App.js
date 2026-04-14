@@ -14,6 +14,10 @@ export function BatchDeleteVariables(arg1) {
   return window['go']['main']['App']['BatchDeleteVariables'](arg1);
 }
 
+export function BatchRegenerateShiftSnapshots(arg1, arg2, arg3) {
+  return window['go']['main']['App']['BatchRegenerateShiftSnapshots'](arg1, arg2, arg3);
+}
+
 export function BatchUpdateVariables(arg1) {
   return window['go']['main']['App']['BatchUpdateVariables'](arg1);
 }
@@ -40,6 +44,10 @@ export function CreateTeam(arg1, arg2) {
 
 export function CreateVariable(arg1) {
   return window['go']['main']['App']['CreateVariable'](arg1);
+}
+
+export function DebugOEEByShift() {
+  return window['go']['main']['App']['DebugOEEByShift']();
 }
 
 export function DebugOEEDirect() {
@@ -142,6 +150,14 @@ export function GetAllOrders() {
   return window['go']['main']['App']['GetAllOrders']();
 }
 
+export function GetAllShiftsOEESummary() {
+  return window['go']['main']['App']['GetAllShiftsOEESummary']();
+}
+
+export function GetAllShiftsQualitySummary() {
+  return window['go']['main']['App']['GetAllShiftsQualitySummary']();
+}
+
 export function GetAllStaff(arg1, arg2) {
   return window['go']['main']['App']['GetAllStaff'](arg1, arg2);
 }
@@ -170,12 +186,24 @@ export function GetChannelStats() {
   return window['go']['main']['App']['GetChannelStats']();
 }
 
+export function GetCurrentShift() {
+  return window['go']['main']['App']['GetCurrentShift']();
+}
+
 export function GetDailyQualityByRun() {
   return window['go']['main']['App']['GetDailyQualityByRun']();
 }
 
 export function GetDailyWorkMinutes() {
   return window['go']['main']['App']['GetDailyWorkMinutes']();
+}
+
+export function GetDefaultShiftWindow() {
+  return window['go']['main']['App']['GetDefaultShiftWindow']();
+}
+
+export function GetDeviceCycleTime(arg1) {
+  return window['go']['main']['App']['GetDeviceCycleTime'](arg1);
 }
 
 export function GetDeviceStatusHistory(arg1) {
@@ -242,12 +270,32 @@ export function GetRealtimeData() {
   return window['go']['main']['App']['GetRealtimeData']();
 }
 
+export function GetScheduleDeviceIDs(arg1) {
+  return window['go']['main']['App']['GetScheduleDeviceIDs'](arg1);
+}
+
 export function GetSessionHistory(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['GetSessionHistory'](arg1, arg2, arg3, arg4);
 }
 
 export function GetSessionStats(arg1) {
   return window['go']['main']['App']['GetSessionStats'](arg1);
+}
+
+export function GetShiftSchedules() {
+  return window['go']['main']['App']['GetShiftSchedules']();
+}
+
+export function GetShiftSnapshots(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['GetShiftSnapshots'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function GetShifts() {
+  return window['go']['main']['App']['GetShifts']();
+}
+
+export function GetShiftsForLogicalDay() {
+  return window['go']['main']['App']['GetShiftsForLogicalDay']();
 }
 
 export function GetStaffAttendance(arg1, arg2, arg3) {
@@ -302,12 +350,28 @@ export function QueryAIStreamWithQueue(arg1) {
   return window['go']['main']['App']['QueryAIStreamWithQueue'](arg1);
 }
 
+export function RegenerateShiftSnapshot(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RegenerateShiftSnapshot'](arg1, arg2, arg3);
+}
+
+export function SaveShiftSchedules(arg1) {
+  return window['go']['main']['App']['SaveShiftSchedules'](arg1);
+}
+
 export function SetBreakTimes(arg1) {
   return window['go']['main']['App']['SetBreakTimes'](arg1);
 }
 
 export function SetDailyWorkMinutes(arg1) {
   return window['go']['main']['App']['SetDailyWorkMinutes'](arg1);
+}
+
+export function SetDeviceCycleTime(arg1, arg2) {
+  return window['go']['main']['App']['SetDeviceCycleTime'](arg1, arg2);
+}
+
+export function SetDeviceSchedule(arg1, arg2) {
+  return window['go']['main']['App']['SetDeviceSchedule'](arg1, arg2);
 }
 
 export function SetProductionCoefficient(arg1) {

@@ -224,16 +224,22 @@ type HourlyProductionAccurate struct {
 	QualityRate float64 `json:"quality_rate"` // 良品率（%）
 }
 
-// GetHourlyProductionAccurate 获取今日每小时精确产量统计（完全参数化，无硬编码）
-// configs: 设备变量配置数组，每个设备指定产量ID、NG加减按钮ID和设备名称
-// 如果传入nil，使用默认配置（设备1和设备2）
-func GetHourlyProductionAccurate(configs []DeviceVarConfig) ([]HourlyProductionAccurate, error) {
+// GetHourlyProductionAccurate 获取指定逻辑日每小时精确产量统计（完全参数化，无硬编码）
+// configs: 设备变量配置数组，每个设备指定产量ID、NG加减按钮ID和设备名称；nil 使用默认配置。
+// logicalDate: "YYYY-MM-DD" 格式的逻辑日期；空字符串使用 CURDATE()（今天）。
+//
+// Returns hourly accurate production statistics for the given logical date.
+// 指定論理日付の時間別精確生産統計を返す。
+func GetHourlyProductionAccurate(configs []DeviceVarConfig, logicalDate string) ([]HourlyProductionAccurate, error) {
 	// 默认配置：设备1和设备2
 	if len(configs) == 0 {
 		configs = []DeviceVarConfig{
 			{DeviceName: "一号机", ProductionVarID: 1, NgAddVarID: 72, NgSubVarID: 71},
 			{DeviceName: "二号机", ProductionVarID: 95, NgAddVarID: 97, NgSubVarID: 96},
 		}
+	}
+	if logicalDate == "" {
+		logicalDate = time.Now().Format("2006-01-02")
 	}
 
 	// 收集所有变量ID并构建动态SQL
@@ -283,6 +289,14 @@ func GetHourlyProductionAccurate(configs []DeviceVarConfig) ([]HourlyProductionA
 	// 调试输出
 	// log.Printf("[GetHourlyProductionAccurate] 生成的productionSQL: %s", productionSQL)
 
+	// CN: 日期范围覆盖逻辑日当天 + 次日（跨零点班次如 14:20→07:40 next day 需要取次日记录）。
+	//     time_slot 用 DATE_ADD 基于逻辑日午夜加整小时数来生成，保证夜班后半段的 time_slot
+	//     与前端 hourLabelToIdx 的 nextDay 日期推导保持一致。
+	// EN: Date range covers logical date + next day (cross-midnight shifts need next-day records).
+	//     time_slot is built by adding whole-hour offsets from midnight of logicalDate,
+	//     matching the frontend's nextDay date derivation for cross-midnight hour labels.
+	// JP: 日付範囲は論理日 + 翌日をカバー（深夜跨ぎシフトには翌日レコードが必要）。
+	//     time_slot は論理日深夜からの整時オフセットで生成し、フロントの nextDay 推論と一致させる。
 	query := fmt.Sprintf(`
 	WITH RawData AS (
 		SELECT 
@@ -302,11 +316,17 @@ func GetHourlyProductionAccurate(configs []DeviceVarConfig) ([]HourlyProductionA
 		FROM sys_data_history h1
 		WHERE 
 			var_id IN (%s)
-			AND DATE(created_at) = CURDATE()
+			AND created_at >= CAST('%s' AS DATE)
+			AND created_at <  DATE_ADD(CAST('%s' AS DATE), INTERVAL 2 DAY)
 	),
 	ProcessedData AS (
 		SELECT 
-			DATE_FORMAT(created_at, '%%Y-%%m-%%d %%H:00:00') AS time_slot,
+			-- CN: 用逻辑日午夜到记录时刻的绝对小时数构造 time_slot，跨日时 hour_idx >= 24
+			--     如 2026-04-11 01:00 对应 logicalDate=2026-04-10，hour_idx=25，
+			--     time_slot = DATE_ADD('2026-04-10', INTERVAL 25 HOUR) = '2026-04-11 01:00:00'
+			-- EN: Absolute hour offset from midnight of logicalDate; cross-midnight yields hour_idx>=24.
+			-- JP: 論理日深夜からの絶対時間オフセットで time_slot を構成。深夜跨ぎ時は hour_idx>=24。
+			DATE_ADD(CAST('%s' AS DATE), INTERVAL FLOOR(TIMESTAMPDIFF(SECOND, CAST('%s' AS DATE), created_at) / 3600) HOUR) AS time_slot,
 			%s AS machine_name,
 			%s AS production_delta,
 			%s AS ng_add,
@@ -314,7 +334,7 @@ func GetHourlyProductionAccurate(configs []DeviceVarConfig) ([]HourlyProductionA
 		FROM RawData
 	)
 	SELECT 
-		time_slot,
+		DATE_FORMAT(time_slot, '%%Y-%%m-%%d %%H:00:00') AS time_slot,
 		machine_name AS device_name,
 		SUM(production_delta) AS total_qty,
 		GREATEST(0, SUM(ng_add) - SUM(ng_sub)) AS ng_qty,
@@ -330,7 +350,7 @@ func GetHourlyProductionAccurate(configs []DeviceVarConfig) ([]HourlyProductionA
 	WHERE machine_name != 'Unknown'
 	GROUP BY time_slot, machine_name
 	ORDER BY time_slot ASC, machine_name ASC
-	`, varIDsStr, deviceNameSQL, productionSQL, ngAddSQL, ngSubSQL)
+	`, varIDsStr, logicalDate, logicalDate, logicalDate, logicalDate, deviceNameSQL, productionSQL, ngAddSQL, ngSubSQL)
 
 	var results []HourlyProductionAccurate
 	err := DB.Raw(query).Scan(&results).Error
@@ -552,6 +572,36 @@ func GetDailyQualityByRun() ([]DeviceQualityStat, error) {
 	return results, nil
 }
 
+// GetShiftQualityByRun 从生产运行记录表获取指定班次时间窗口内各设备良品率
+// CN: 逻辑与 GetDailyQualityByRun 完全相同，仅将日期过滤替换为精确时间范围，用于当班/历史班次数据展示。
+// EN: Same logic as GetDailyQualityByRun, but filters by an exact datetime range for shift-scoped quality display.
+// JP: GetDailyQualityByRun と同ロジック。日付フィルタを正確な時間範囲に置き換えてシフト単位の良品率を返す。
+func GetShiftQualityByRun(start, end time.Time) ([]DeviceQualityStat, error) {
+	query := `
+	SELECT
+		d.id            AS device_id,
+		d.device_name   AS device_name,
+		SUM(r.run_ok_qty + r.run_ng_qty) AS total_qty,
+		SUM(r.run_ok_qty) AS ok_qty,
+		SUM(r.run_ng_qty) AS ng_qty,
+		CASE
+			WHEN SUM(r.run_ok_qty + r.run_ng_qty) = 0 THEN 100.0
+			ELSE ROUND(SUM(r.run_ok_qty) * 100.0 / NULLIF(SUM(r.run_ok_qty + r.run_ng_qty), 0), 2)
+		END AS quality_rate
+	FROM pro_production_runs r
+	JOIN sys_devices d ON d.id = r.device_id
+	WHERE r.start_time >= ? AND r.start_time < ?
+	GROUP BY d.id, d.device_name
+	ORDER BY d.id ASC
+	`
+	var results []DeviceQualityStat
+	err := DB.Raw(query, start, end).Scan(&results).Error
+	if err != nil {
+		return nil, fmt.Errorf("查询班次运行良品率失败: %w", err)
+	}
+	return results, nil
+}
+
 // GetActiveOrderQuality 获取当前在产工单（生产中+暂停）各设备良品率
 // 不限日期，只要工单状态是 1(生产中) 或 2(暂停) 就纳入统计
 func GetActiveOrderQuality() ([]DeviceQualityStat, error) {
@@ -653,6 +703,25 @@ type BreakTimeConfig struct {
 	EndMin    int    `json:"end_min"`    // 结束分钟
 }
 
+// ShiftWindow 班次工作时间窗口（用于 OEE SQL 参数化）
+// Shift work-time window used to parameterise the OEE SQL query.
+// OEE SQL クエリをパラメータ化するためのシフト作業時間ウィンドウ。
+//
+// WorkStart / WorkEnd 格式为 "HH:MM"（如 "07:40" / "16:20"）。
+// LogicalDate 为 "YYYY-MM-DD"，空字符串时 SQL 使用 CURDATE()（即今天）。
+// HourStart / HourEnd 控制 Hours CTE 生成的小时范围：
+//   - HourStart：第一个时间桶的 hour_idx（如 7 → 7:00-8:00）
+//   - HourEnd：SQL 中 WHERE hour_idx < HourEnd 的上限（如 16 → 最后桶 16:00-17:00）
+//
+// 传 nil 时使用兜底默认值 07:40-16:20 / HourStart=7 / HourEnd=16 / 今天。
+type ShiftWindow struct {
+	WorkStart   string // "HH:MM"，如 "07:40"
+	WorkEnd     string // "HH:MM"，如 "16:20"
+	LogicalDate string // "YYYY-MM-DD"，逻辑日期；空 = CURDATE()
+	HourStart   int    // Hours CTE 起始 hour_idx，0 = 默认 7
+	HourEnd     int    // Hours CTE 上限（WHERE hour_idx < HourEnd），0 = 默认 16
+}
+
 // HourlyOEE 每小时OEE统计
 type HourlyOEE struct {
 	TimePeriod    string  `json:"time_period"`      // 时间段（如 "7:00 - 8:00" 或 "=== 全天合计 ==="）
@@ -669,11 +738,14 @@ type HourlyOEE struct {
 	Hour int `json:"hour"` // 小时 (7-19)，从time_period解析
 }
 
-
 // GetHourlyOEE 获取今日每小时OEE统计
 // configs: 设备配置数组，如果为nil则使用默认配置
 // breakTimes: 休息时间配置数组，如果为nil则使用默认配置
-func GetHourlyOEE(configs []DeviceOEEConfig, breakTimes []BreakTimeConfig) ([]HourlyOEE, error) {
+// window: 班次时间窗口（工作起止时间），传nil时使用默认 07:40-16:20
+//
+// Returns hourly OEE statistics for today using dynamic shift time window.
+// 動的なシフト時間ウィンドウを使用して本日の時間別OEE統計を返す。
+func GetHourlyOEE(configs []DeviceOEEConfig, breakTimes []BreakTimeConfig, window *ShiftWindow) ([]HourlyOEE, error) {
 	// 默认配置：设备1和设备2
 	if len(configs) == 0 {
 		configs = []DeviceOEEConfig{
@@ -688,6 +760,31 @@ func GetHourlyOEE(configs []DeviceOEEConfig, breakTimes []BreakTimeConfig) ([]Ho
 			{Name: "上午休息", StartHour: 9, StartMin: 40, EndHour: 9, EndMin: 50},
 			{Name: "午餐休息", StartHour: 11, StartMin: 40, EndHour: 12, EndMin: 20},
 			{Name: "下午休息", StartHour: 14, StartMin: 20, EndHour: 14, EndMin: 30},
+		}
+	}
+
+	// 解析班次时间窗口；未传入时使用历史默认值 07:40-16:20
+	workStart := "07:40"
+	workEnd := "16:20"
+	logicalDate := time.Now().Format("2006-01-02") // 默认今天
+	startHour := 7                                 // Hours CTE 起始 hour_idx
+	hourEndLimit := 16                             // Hours CTE WHERE hour_idx < N 的 N
+
+	if window != nil {
+		if window.WorkStart != "" {
+			workStart = window.WorkStart
+		}
+		if window.WorkEnd != "" {
+			workEnd = window.WorkEnd
+		}
+		if window.LogicalDate != "" {
+			logicalDate = window.LogicalDate
+		}
+		if window.HourStart > 0 {
+			startHour = window.HourStart
+		}
+		if window.HourEnd > 0 {
+			hourEndLimit = window.HourEnd
 		}
 	}
 
@@ -728,25 +825,33 @@ func GetHourlyOEE(configs []DeviceOEEConfig, breakTimes []BreakTimeConfig) ([]Ho
 	// 	log.Printf("  - %s: %02d:%02d - %02d:%02d", bt.Name, bt.StartHour, bt.StartMin, bt.EndHour, bt.EndMin)
 	// }
 
+	// CN: Hours CTE 结束小时标签（用于 time_period 输出）
+	// EN: End-hour label shown in time_period output (= hourEndLimit, the last bucket's hour_idx)
+	// JP: time_period 出力に使う終了時間ラベル（最後のバケットの hour_idx = hourEndLimit）
 	query := fmt.Sprintf(`
 WITH RECURSIVE 
--- 1. 配置（工作时间 7:40-16:20）
+-- 1. 配置（逻辑日期 + 工作时间窗口，均由班次动态传入，兜底默认今天 07:40-16:20）
 Config AS ( 
-    SELECT CURDATE() as target_date,
-           ADDTIME(CURDATE(), '07:40:00') as work_start,
-           ADDTIME(CURDATE(), '16:20:00') as work_end
+    SELECT CAST('%s' AS DATE) as target_date,
+           ADDTIME(CAST('%s' AS DATE), '%s:00') as work_start,
+           ADDTIME(CAST('%s' AS DATE), '%s:00') as work_end
 ),
 Hours AS (
-    SELECT 7 as hour_idx, ADDTIME(target_date, '07:00:00') as hour_start, ADDTIME(target_date, '08:00:00') as hour_end FROM Config
+    SELECT %d as hour_idx,
+           ADDTIME(target_date, '%02d:00:00') as hour_start,
+           ADDTIME(target_date, '%02d:00:00') as hour_end
+    FROM Config
     UNION ALL
-    SELECT hour_idx + 1, ADDTIME(target_date, SEC_TO_TIME((hour_idx + 1) * 3600)), ADDTIME(target_date, SEC_TO_TIME((hour_idx + 2) * 3600))
-    FROM Hours, Config WHERE hour_idx < 16
+    SELECT hour_idx + 1,
+           ADDTIME(target_date, SEC_TO_TIME((hour_idx + 1) * 3600)),
+           ADDTIME(target_date, SEC_TO_TIME((hour_idx + 2) * 3600))
+    FROM Hours, Config WHERE hour_idx < %d
 ),
 DeviceConfig AS (
     %s
 ),
 
--- 2. 定义休息时间段（✅ 动态生成）
+-- 2. 定义休息时间段（动态生成，含班次内休息 + 班次间间隔）
 Breaks AS (
     %s
 ),
@@ -765,42 +870,55 @@ StatusStats AS (
     GROUP BY dh.hour_idx, dh.device_id
 ),
 
--- 4. 生产流 (查当天数据，额外拉一条昨天最后的记录用于LAG基准)
+-- 4. 生产流 (查班次数据，额外拉一条 work_start 之前的最后记录用于 LAG 基准)
+-- CN: work_start/work_end 均为完整 DATETIME，跨日班次（如22:00→06:00）work_end 会指向次日，ADDTIME 直接使用无需截断。
+-- EN: work_start/work_end are full DATETIMEs; for cross-midnight shifts, work_end points to next day, ADDTIME handles it correctly.
+-- JP: work_start/work_end は完全な DATETIME。深夜跨ぎシフトでは work_end が翌日を指し、ADDTIME がそのまま正しく処理する。
+-- CN: ProductionRaw 加入 last_nonzero_val 防回跳子查询，消除计数器 reset bounce（如 65→0→65 产生的虚增产量）。
+-- EN: ProductionRaw includes last_nonzero_val subquery to prevent counter-reset bounce (e.g. 65→0→65 ghost delta).
+-- JP: ProductionRaw に last_nonzero_val サブクエリを追加し、カウンタリセットバウンス（例: 65→0→65）による虚偽増分を防止。
 ProductionRaw AS (
     SELECT 
         d.created_at, d.val, d.var_id, dc.device_id, dc.var_ok, dc.var_ng_add, dc.var_ng_sub,
         CASE WHEN d.var_id IN (dc.var_ok) THEN 
             LAG(d.val) OVER (PARTITION BY d.var_id ORDER BY d.created_at) 
-        END as prev_val
+        END as prev_val,
+        CASE WHEN d.var_id IN (dc.var_ok) THEN (
+            SELECT h2.val FROM sys_data_history h2
+            WHERE h2.var_id = d.var_id AND h2.created_at < d.created_at AND h2.val > 0
+            ORDER BY h2.created_at DESC LIMIT 1
+        ) END as last_nonzero_val
     FROM sys_data_history d
     JOIN DeviceConfig dc ON d.var_id IN (dc.var_ok, dc.var_ng_add, dc.var_ng_sub)
     CROSS JOIN Config c
     WHERE (
-        -- 今天的数据
-        d.created_at >= ADDTIME(c.target_date, '07:00:00')
-        AND d.created_at <= ADDTIME(c.target_date, '17:00:00')
+        -- 班次窗口前后各 1 小时，确保 LAG 有足够数据；直接用 DATETIME 加减，兼容跨日
+        d.created_at >= ADDTIME((SELECT work_start FROM Config), '-01:00:00')
+        AND d.created_at <= ADDTIME((SELECT work_end FROM Config), '01:00:00')
     ) OR (
-        -- 每个var_id在今天07:00之前的最后一条，用于LAG基准
+        -- 每个 var_id 在 work_start 之前的最后一条，用于 LAG 基准
         d.id IN (
             SELECT MAX(id) FROM sys_data_history
             WHERE var_id IN (%s)
-              AND created_at < ADDTIME(CURDATE(), '07:00:00')
+              AND created_at < (SELECT work_start FROM Config)
             GROUP BY var_id
         )
     )
 ),
 
--- var_ok 记录的是总产出累计值（含NG），ng_add/ng_sub 均为脉冲信号（val=1为上升沿）
--- ng_add val=1 → +1NG；ng_sub val=1 → -1NG（撤销）；total_qty = var_ok 差值
--- 注意：ng_qty 不在此处截断，保留负值，由上层 GREATEST 保护，确保合计行撤销能正确抵消
+-- CN: 三档防回跳 CASE：①prev=0且有last_nonzero→用last_nonzero ②正常递增→差值 ③其余→取当前值
+-- EN: Three-branch anti-bounce CASE: ①prev=0 with last_nonzero→use it ②normal increment→delta ③else→current val
+-- JP: 3段防バウンスCASE：①prev=0+last_nonzero有り→使用 ②正常増加→差分 ③その他→現在値
 ProductionStats AS (
     SELECT 
-        HOUR(created_at) as hour_idx,
+        FLOOR(TIMESTAMPDIFF(SECOND, c.target_date, created_at) / 3600) as hour_idx,
         device_id,
         SUM(CASE 
             WHEN var_id = var_ok THEN 
                 CASE 
                     WHEN prev_val IS NULL THEN val
+                    WHEN prev_val = 0 AND last_nonzero_val IS NOT NULL AND val >= last_nonzero_val
+                        THEN val - last_nonzero_val
                     WHEN val >= prev_val THEN val - prev_val 
                     ELSE val
                 END
@@ -813,9 +931,9 @@ ProductionStats AS (
          END) as ng_qty
     FROM ProductionRaw
     CROSS JOIN Config c
-    WHERE created_at >= ADDTIME(c.target_date, '07:40:00')
-      AND created_at <= ADDTIME(c.target_date, '16:20:00')
-    GROUP BY HOUR(created_at), device_id
+    WHERE created_at >= (SELECT work_start FROM Config)
+      AND created_at <= (SELECT work_end FROM Config)
+    GROUP BY FLOOR(TIMESTAMPDIFF(SECOND, c.target_date, created_at) / 3600), device_id
 ),
 
 -- 5. 汇总（t_run 和 t_plan 均扣除休息时间，保证口径一致，时间稼动率不超100%）
@@ -866,9 +984,11 @@ FROM CombinedMetrics
 GROUP BY device_id, hour_idx WITH ROLLUP
 HAVING device_id IS NOT NULL
 ORDER BY device_id, hour_idx
-	`, deviceConfigSQL, breaksSQL, varOKList)
+	`, logicalDate, logicalDate, workStart, logicalDate, workEnd,
+		startHour, startHour, startHour+1, hourEndLimit,
+		deviceConfigSQL, breaksSQL, varOKList)
 
-	// log.Printf("[GetHourlyOEE] 执行OEE查询（包含汇总），设备数: %d, 休息时间段数: %d", len(configs), len(breakTimes))
+	// log.Printf("[GetHourlyOEE] 执行OEE查询，逻辑日期=%s, 时间窗=%s~%s, 小时范围=%d~%d", logicalDate, workStart, workEnd, startHour, hourEndLimit)
 	log.Printf("[GetHourlyOEE] SQL: %s", query)
 	type RawResult struct {
 		TimePeriod    string  `gorm:"column:time_period"`
@@ -933,7 +1053,12 @@ type HourlyOEEDebug struct {
 }
 
 // GetHourlyOEEWithSQL 与GetHourlyOEE使用相同配置，额外返回SQL字符串和ok_qty/ng_qty
-func GetHourlyOEEWithSQL(configs []DeviceOEEConfig, breakTimes []BreakTimeConfig) ([]HourlyOEEDebug, string, error) {
+// fullDay=true 时 t_plan 使用完整时间窗口（不受 NOW() 截断），适用于全天计划视图；
+// fullDay=false（默认）时 t_plan 截断到当前时刻，适用于实时驾驶舱模式。
+// fullDay=true: t_plan uses full window (no NOW() cap), for full-day plan view.
+// fullDay=true: t_plan はウィンドウ全体を使用（NOW() でカットしない）、全日計画ビュー用。
+func GetHourlyOEEWithSQL(configs []DeviceOEEConfig, breakTimes []BreakTimeConfig, window *ShiftWindow, fullDay ...bool) ([]HourlyOEEDebug, string, error) {
+	useFullDay := len(fullDay) > 0 && fullDay[0]
 	if len(configs) == 0 {
 		configs = []DeviceOEEConfig{
 			{DeviceID: 1, DeviceName: "设备#1", VarOK: 1, VarNGAdd: 72, VarNGSub: 71, CycleTime: 100},
@@ -945,6 +1070,30 @@ func GetHourlyOEEWithSQL(configs []DeviceOEEConfig, breakTimes []BreakTimeConfig
 			{Name: "上午休息", StartHour: 9, StartMin: 40, EndHour: 9, EndMin: 50},
 			{Name: "午餐休息", StartHour: 11, StartMin: 40, EndHour: 12, EndMin: 20},
 			{Name: "下午休息", StartHour: 14, StartMin: 20, EndHour: 14, EndMin: 30},
+		}
+	}
+
+	workStart := "07:40"
+	workEnd := "16:20"
+	logicalDate2 := time.Now().Format("2006-01-02")
+	startHour2 := 7
+	hourEndLimit2 := 16
+
+	if window != nil {
+		if window.WorkStart != "" {
+			workStart = window.WorkStart
+		}
+		if window.WorkEnd != "" {
+			workEnd = window.WorkEnd
+		}
+		if window.LogicalDate != "" {
+			logicalDate2 = window.LogicalDate
+		}
+		if window.HourStart > 0 {
+			startHour2 = window.HourStart
+		}
+		if window.HourEnd > 0 {
+			hourEndLimit2 = window.HourEnd
 		}
 	}
 
@@ -976,17 +1125,40 @@ func GetHourlyOEEWithSQL(configs []DeviceOEEConfig, breakTimes []BreakTimeConfig
 		breaksSQL = "SELECT ADDTIME(target_date, '00:00:00') as b_start, ADDTIME(target_date, '00:00:00') as b_end FROM Config WHERE 1=0"
 	}
 
+	// CN: fullDay=true 时 t_plan 使用完整班次窗口（不受 NOW() 截断），适用于全天计划视图。
+	// EN: fullDay=true uses the complete shift window for t_plan (no NOW() cap), for full-day plan view.
+	// JP: fullDay=true は t_plan にシフト全体を使用（NOW() カットなし）、全日計画ビュー用。
+	var tPlanSQL string
+	if useFullDay {
+		tPlanSQL = `GREATEST(
+            TIMESTAMPDIFF(SECOND, GREATEST(hd.hour_start, (SELECT work_start FROM Config)), LEAST(hd.hour_end, (SELECT work_end FROM Config)))
+            - bo.break_sec,
+        0) as t_plan`
+	} else {
+		tPlanSQL = `GREATEST(
+            (CASE WHEN hd.hour_start > NOW() THEN 0
+                  WHEN hd.hour_end > NOW() THEN TIMESTAMPDIFF(SECOND, GREATEST(hd.hour_start, (SELECT work_start FROM Config)), LEAST(NOW(), (SELECT work_end FROM Config)))
+                  ELSE TIMESTAMPDIFF(SECOND, GREATEST(hd.hour_start, (SELECT work_start FROM Config)), LEAST(hd.hour_end, (SELECT work_end FROM Config)))
+            END) - bo.break_sec,
+        0) as t_plan`
+	}
+
 	query := fmt.Sprintf(`WITH RECURSIVE 
 Config AS (
-    SELECT CURDATE() as target_date,
-           ADDTIME(CURDATE(), '07:40:00') as work_start,
-           ADDTIME(CURDATE(), '16:20:00') as work_end
+    SELECT CAST('%s' AS DATE) as target_date,
+           ADDTIME(CAST('%s' AS DATE), '%s:00') as work_start,
+           ADDTIME(CAST('%s' AS DATE), '%s:00') as work_end
 ),
 Hours AS (
-    SELECT 7 as hour_idx, ADDTIME(target_date, '07:00:00') as hour_start, ADDTIME(target_date, '08:00:00') as hour_end FROM Config
+    SELECT %d as hour_idx,
+           ADDTIME(target_date, '%02d:00:00') as hour_start,
+           ADDTIME(target_date, '%02d:00:00') as hour_end
+    FROM Config
     UNION ALL
-    SELECT hour_idx + 1, ADDTIME(target_date, SEC_TO_TIME((hour_idx + 1) * 3600)), ADDTIME(target_date, SEC_TO_TIME((hour_idx + 2) * 3600))
-    FROM Hours, Config WHERE hour_idx < 16
+    SELECT hour_idx + 1,
+           ADDTIME(target_date, SEC_TO_TIME((hour_idx + 1) * 3600)),
+           ADDTIME(target_date, SEC_TO_TIME((hour_idx + 2) * 3600))
+    FROM Hours, Config WHERE hour_idx < %d
 ),
 DeviceConfig AS (
     %s
@@ -1005,30 +1177,45 @@ StatusStats AS (
     AND COALESCE(s.end_time, NOW()) >= (SELECT work_start FROM Config)
     GROUP BY dh.hour_idx, dh.device_id
 ),
+-- CN: ProductionRaw 加入 last_nonzero_val 防回跳（与 GetHourlyOEE 同步修复）。
+-- EN: ProductionRaw includes last_nonzero_val (synced fix with GetHourlyOEE).
+-- JP: ProductionRaw に last_nonzero_val を追加（GetHourlyOEE と同期修正）。
 ProductionRaw AS (
     SELECT d.created_at, d.val, d.var_id, dc.device_id, dc.var_ok, dc.var_ng_add, dc.var_ng_sub,
         CASE WHEN d.var_id IN (dc.var_ok) THEN
             LAG(d.val) OVER (PARTITION BY d.var_id ORDER BY d.created_at)
-        END as prev_val
+        END as prev_val,
+        CASE WHEN d.var_id IN (dc.var_ok) THEN (
+            SELECT h2.val FROM sys_data_history h2
+            WHERE h2.var_id = d.var_id AND h2.created_at < d.created_at AND h2.val > 0
+            ORDER BY h2.created_at DESC LIMIT 1
+        ) END as last_nonzero_val
     FROM sys_data_history d
     JOIN DeviceConfig dc ON d.var_id IN (dc.var_ok, dc.var_ng_add, dc.var_ng_sub)
     CROSS JOIN Config c
     WHERE (
-        d.created_at >= ADDTIME(c.target_date, '07:00:00')
-        AND d.created_at <= ADDTIME(c.target_date, '17:00:00')
+        -- 班次窗口前后各1小时，用完整 DATETIME 加减，兼容跨日班次
+        d.created_at >= ADDTIME((SELECT work_start FROM Config), '-01:00:00')
+        AND d.created_at <= ADDTIME((SELECT work_end FROM Config), '01:00:00')
     ) OR (
         d.id IN (
             SELECT MAX(id) FROM sys_data_history
             WHERE var_id IN (%s)
-              AND created_at < ADDTIME(CURDATE(), '07:00:00')
+              AND created_at < (SELECT work_start FROM Config)
             GROUP BY var_id
         )
     )
 ),
 ProductionStats AS (
-    SELECT HOUR(created_at) as hour_idx, device_id,
+    SELECT FLOOR(TIMESTAMPDIFF(SECOND, c.target_date, created_at) / 3600) as hour_idx, device_id,
         SUM(CASE WHEN var_id = var_ok THEN
-            CASE WHEN prev_val IS NULL THEN val WHEN val >= prev_val THEN val - prev_val ELSE val END
+            CASE
+                WHEN prev_val IS NULL THEN val
+                WHEN prev_val = 0 AND last_nonzero_val IS NOT NULL AND val >= last_nonzero_val
+                    THEN val - last_nonzero_val
+                WHEN val >= prev_val THEN val - prev_val
+                ELSE val
+            END
         ELSE 0 END) as total_qty,
         GREATEST(SUM(CASE
             WHEN var_id = var_ng_add AND val = 1 THEN 1
@@ -1036,9 +1223,9 @@ ProductionStats AS (
             ELSE 0 END), 0) as ng_qty
     FROM ProductionRaw
     CROSS JOIN Config c
-    WHERE created_at >= ADDTIME(c.target_date, '07:40:00')
-      AND created_at <= ADDTIME(c.target_date, '16:20:00')
-    GROUP BY HOUR(created_at), device_id
+    WHERE created_at >= (SELECT work_start FROM Config)
+      AND created_at <= (SELECT work_end FROM Config)
+    GROUP BY FLOOR(TIMESTAMPDIFF(SECOND, c.target_date, created_at) / 3600), device_id
 ),
 HourDevice AS (
     SELECT h.hour_idx, h.hour_start, h.hour_end, dc.device_id, dc.device_name, dc.cycle_time
@@ -1059,12 +1246,7 @@ CombinedMetrics AS (
         COALESCE(p.total_qty, 0) - COALESCE(p.ng_qty, 0) as q_ok,
         COALESCE(p.ng_qty, 0) as q_ng,
         COALESCE(p.total_qty, 0) as q_total,
-        GREATEST(
-            (CASE WHEN hd.hour_start > NOW() THEN 0
-                  WHEN hd.hour_end > NOW() THEN TIMESTAMPDIFF(SECOND, GREATEST(hd.hour_start, (SELECT work_start FROM Config)), LEAST(NOW(), (SELECT work_end FROM Config)))
-                  ELSE TIMESTAMPDIFF(SECOND, GREATEST(hd.hour_start, (SELECT work_start FROM Config)), LEAST(hd.hour_end, (SELECT work_end FROM Config)))
-            END) - bo.break_sec,
-        0) as t_plan
+        %s
     FROM HourDevice hd
     LEFT JOIN BreakOverlap bo ON hd.hour_idx = bo.hour_idx AND hd.device_id = bo.device_id
     LEFT JOIN StatusStats s ON hd.hour_idx = s.hour_idx AND hd.device_id = s.device_id
@@ -1086,7 +1268,10 @@ SELECT CASE WHEN hour_idx IS NULL THEN '合计' ELSE CONCAT(hour_idx, ':00-', ho
 FROM CombinedMetrics
 GROUP BY device_id, hour_idx WITH ROLLUP
 HAVING device_id IS NOT NULL
-ORDER BY device_id, hour_idx`, deviceConfigSQL, breaksSQL, varOKList)
+ORDER BY device_id, hour_idx`,
+		logicalDate2, logicalDate2, workStart, logicalDate2, workEnd,
+		startHour2, startHour2, startHour2+1, hourEndLimit2,
+		deviceConfigSQL, breaksSQL, varOKList, tPlanSQL)
 
 	var results []HourlyOEEDebug
 	err := DB.Raw(query).Scan(&results).Error
@@ -1094,4 +1279,98 @@ ORDER BY device_id, hour_idx`, deviceConfigSQL, breaksSQL, varOKList)
 		return nil, query, fmt.Errorf("GetHourlyOEEWithSQL查询失败: %w", err)
 	}
 	return results, query, nil
+}
+// ========================================================
+// 班次窗口产量聚合（防复位回跳版，供快照生成复用）
+// Shift-window production aggregation with anti-reset-bounce logic (shared by snapshot generation).
+// 班次ウィンドウ産量集計（リセット跳ね返り防止版、スナップショット生成共用）。
+// ========================================================
+
+// ShiftWindowProdResult 单设备班次窗口产量聚合结果。
+// Result of shift-window production aggregation for one device.
+// 1設備分の班次ウィンドウ産量集計結果。
+type ShiftWindowProdResult struct {
+	TotalQty int `json:"total_qty"` // 窗口内总产量（防复位口径）
+	NgQty    int `json:"ng_qty"`    // NG 净增量（ng_add 脉冲 - ng_sub 脉冲）
+	OkQty    int `json:"ok_qty"`    // 良品数量（TotalQty - NgQty）
+}
+
+// GetShiftWindowProduction 聚合指定时间窗口内单个设备的产量、NG、良品数。
+// CN: 产量计数器采用与 GetHourlyProductionAccurate/GetMonthlyProductionAccurate 完全一致的
+//     "防复位回跳"规则：
+//       1. prev_val = 0 且 last_nonzero_val IS NOT NULL 且 val >= last_nonzero_val
+//          → delta = val - last_nonzero_val（设备复位后首次上报，相对于复位前最后有效值）
+//       2. val >= prev_val → delta = val - prev_val（正常累加）
+//       3. 其余（如清零后 val < last_nonzero_val）→ delta = val（当次绝对值当增量，即设备被设置为新基点）
+//     NG 加/减按钮保持现状：val=1 脉冲计数，不做边沿去重。
+// EN: Production counter uses the same anti-reset-bounce rule as GetHourlyProductionAccurate.
+//     NG add/sub buttons remain as pulse-counts (no edge-dedup this round).
+// JP: 産量カウンタは GetHourlyProductionAccurate と同一のリセット跳ね返り防止規則を適用。
+//     NG ボタンは今回未変更（パルスカウント方式継続）。
+//
+// cfg: 设备变量映射（生产变量 ID / NG 加减变量 ID）。
+// shiftStart / shiftEnd: 班次时间窗口（含首端，不含末端，与 SQL BETWEEN 语义一致）。
+func GetShiftWindowProduction(cfg DeviceVarConfig, shiftStart, shiftEnd time.Time) (ShiftWindowProdResult, error) {
+	startStr := shiftStart.Format("2006-01-02 15:04:05")
+	endStr := shiftEnd.Format("2006-01-02 15:04:05")
+
+	// CN: productionSQL 与月度/小时精确统计完全相同的三档 CASE：
+	//     ① 复位后首条（prev=0, last_nonzero_val 存在，新值>=旧非零值）→ val - last_nonzero_val
+	//     ② 正常累加（val >= prev_val）→ val - prev_val
+	//     ③ 其余情况（新值<旧非零值，即清零重置）→ val
+	// EN: Three-branch CASE identical to monthly/hourly accurate stats.
+	// JP: 月次・時間別精確統計と完全同一の3分岐 CASE 文。
+	productionSQL := fmt.Sprintf(
+		"WHEN var_id = %d THEN CASE "+
+			"WHEN prev_val = 0 AND last_nonzero_val IS NOT NULL AND val >= last_nonzero_val THEN val - last_nonzero_val "+
+			"WHEN val >= prev_val THEN val - prev_val "+
+			"ELSE val END ",
+		cfg.ProductionVarID)
+
+	ngAddSQL := fmt.Sprintf("WHEN var_id = %d AND val = 1 THEN 1 ", cfg.NgAddVarID)
+	ngSubSQL := fmt.Sprintf("WHEN var_id = %d AND val = 1 THEN 1 ", cfg.NgSubVarID)
+
+	query := fmt.Sprintf(`
+		WITH RawData AS (
+			SELECT
+				var_id,
+				val,
+				created_at,
+				LAG(val, 1, 0) OVER (PARTITION BY var_id ORDER BY created_at) AS prev_val,
+				(
+					SELECT h2.val
+					FROM sys_data_history h2
+					WHERE h2.var_id = h1.var_id
+						AND h2.created_at < h1.created_at
+						AND h2.val > 0
+					ORDER BY h2.created_at DESC
+					LIMIT 1
+				) AS last_nonzero_val
+			FROM sys_data_history h1
+			WHERE var_id IN (%d, %d, %d)
+				AND created_at >= '%s'
+				AND created_at <  '%s'
+		),
+		Calc AS (
+			SELECT
+				CASE %s ELSE 0 END AS prod,
+				CASE %s ELSE 0 END AS ng_add,
+				CASE %s ELSE 0 END AS ng_sub
+			FROM RawData
+		)
+		SELECT
+			COALESCE(SUM(prod), 0)                                       AS total_qty,
+			GREATEST(0, COALESCE(SUM(ng_add) - SUM(ng_sub), 0))         AS ng_qty,
+			COALESCE(SUM(prod), 0) - GREATEST(0, COALESCE(SUM(ng_add) - SUM(ng_sub), 0)) AS ok_qty
+		FROM Calc`,
+		cfg.ProductionVarID, cfg.NgAddVarID, cfg.NgSubVarID,
+		startStr, endStr,
+		productionSQL, ngAddSQL, ngSubSQL,
+	)
+
+	var result ShiftWindowProdResult
+	if err := DB.Raw(query).Scan(&result).Error; err != nil {
+		return ShiftWindowProdResult{}, fmt.Errorf("GetShiftWindowProduction 查询失败: %w", err)
+	}
+	return result, nil
 }

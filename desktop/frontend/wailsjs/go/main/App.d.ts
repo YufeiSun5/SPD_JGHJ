@@ -11,6 +11,8 @@ export function AddKnowledge(arg1:string,arg2:any):Promise<main.AddKnowledgeResp
 
 export function BatchDeleteVariables(arg1:Array<number>):Promise<void>;
 
+export function BatchRegenerateShiftSnapshots(arg1:Array<string>,arg2:Array<number>,arg3:Array<number>):Promise<Array<main.BatchRegenerateResult>>;
+
 export function BatchUpdateVariables(arg1:Array<database.VariableRow>):Promise<void>;
 
 export function CheckAIServiceHealth():Promise<boolean>;
@@ -24,6 +26,8 @@ export function CreateTask(arg1:models.Task):Promise<void>;
 export function CreateTeam(arg1:string,arg2:any):Promise<models.SysTeam>;
 
 export function CreateVariable(arg1:database.VariableRow):Promise<void>;
+
+export function DebugOEEByShift():Promise<Array<Record<string, any>>>;
 
 export function DebugOEEDirect():Promise<Record<string, any>>;
 
@@ -75,6 +79,10 @@ export function GetAllGateways():Promise<Array<main.Gateway>>;
 
 export function GetAllOrders():Promise<Array<models.ProOrder>>;
 
+export function GetAllShiftsOEESummary():Promise<Array<main.ShiftOEESummary>>;
+
+export function GetAllShiftsQualitySummary():Promise<Array<main.ShiftQualitySummary>>;
+
 export function GetAllStaff(arg1:any,arg2:any):Promise<Array<models.SysStaff>>;
 
 export function GetAllTags():Promise<Array<main.TagInfo>>;
@@ -89,9 +97,15 @@ export function GetBreakTimes():Promise<Array<main.BreakTime>>;
 
 export function GetChannelStats():Promise<Record<string, number>>;
 
+export function GetCurrentShift():Promise<main.ShiftConfig>;
+
 export function GetDailyQualityByRun():Promise<Array<database.DeviceQualityStat>>;
 
 export function GetDailyWorkMinutes():Promise<number>;
+
+export function GetDefaultShiftWindow():Promise<string|string>;
+
+export function GetDeviceCycleTime(arg1:number):Promise<number>;
 
 export function GetDeviceStatusHistory(arg1:number):Promise<Array<models.SysDeviceStatus>>;
 
@@ -125,9 +139,19 @@ export function GetRealHourlyProduction():Promise<Array<database.HourlyProductio
 
 export function GetRealtimeData():Promise<Array<main.TagData>>;
 
+export function GetScheduleDeviceIDs(arg1:number):Promise<Array<number>>;
+
 export function GetSessionHistory(arg1:any,arg2:any,arg3:string,arg4:string):Promise<Array<models.ProMachineSession>>;
 
 export function GetSessionStats(arg1:number):Promise<models.SessionStatusResponse>;
+
+export function GetShiftSchedules():Promise<Array<main.ShiftScheduleConfig>>;
+
+export function GetShiftSnapshots(arg1:string,arg2:string,arg3:any,arg4:any,arg5:string):Promise<Array<models.ProShiftSnapshot>>;
+
+export function GetShifts():Promise<Array<main.ShiftConfig>>;
+
+export function GetShiftsForLogicalDay():Promise<Array<main.LogicalDayShift>>;
 
 export function GetStaffAttendance(arg1:number,arg2:string,arg3:string):Promise<Array<models.ProMachineSession>>;
 
@@ -155,9 +179,17 @@ export function QueryAIStream(arg1:string):Promise<void>;
 
 export function QueryAIStreamWithQueue(arg1:string):Promise<void>;
 
+export function RegenerateShiftSnapshot(arg1:string,arg2:number,arg3:number):Promise<void>;
+
+export function SaveShiftSchedules(arg1:Array<main.ShiftScheduleConfig>):Promise<void>;
+
 export function SetBreakTimes(arg1:Array<main.BreakTime>):Promise<void>;
 
 export function SetDailyWorkMinutes(arg1:number):Promise<void>;
+
+export function SetDeviceCycleTime(arg1:number,arg2:number):Promise<void>;
+
+export function SetDeviceSchedule(arg1:number,arg2:number):Promise<void>;
 
 export function SetProductionCoefficient(arg1:number):Promise<void>;
 

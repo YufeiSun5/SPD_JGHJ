@@ -78,45 +78,44 @@
       </div>
     </div>
 
-    <!-- 筛选栏 -->
-    <div class="filter-bar">
-      <div class="filter-group">
-        <label><i class="fas fa-filter"></i> 班组筛选：</label>
-        <div class="custom-select">
-          <select v-model="filters.teamId" @change="loadStaff">
-            <option :value="null">全部班组</option>
-            <option v-for="team in teams" :key="team.id" :value="team.id">
-              {{ team.team_name }}
-            </option>
-          </select>
-        </div>
-      </div>
-      <div class="filter-group">
-        <label><i class="fas fa-user-check"></i> 在职状态：</label>
-        <div class="custom-select">
-          <select v-model="filters.isActive" @change="loadStaff">
-            <option :value="null">全部</option>
-            <option :value="1">在职</option>
-            <option :value="0">离职</option>
-          </select>
-        </div>
-      </div>
-      <div class="filter-group search-box">
-        <i class="fas fa-search"></i>
-        <input 
-          v-model="searchKeyword" 
-          type="text" 
-          placeholder="搜索员工姓名或工号..."
-          @input="filterStaff"
-        />
-      </div>
-    </div>
-
     <!-- 员工列表 -->
     <div class="card">
       <div class="card-header">
         <h3><i class="fas fa-list"></i> 员工列表</h3>
         <span class="badge">{{ filteredStaff.length }} 人</span>
+      </div>
+      <!-- 筛选栏 -->
+      <div class="filter-bar">
+        <div class="filter-group">
+          <label><i class="fas fa-filter"></i> 班组筛选：</label>
+          <div class="custom-select">
+            <select v-model="filters.teamId" @change="loadStaff">
+              <option :value="null">全部班组</option>
+              <option v-for="team in teams" :key="team.id" :value="team.id">
+                {{ team.team_name }}
+              </option>
+            </select>
+          </div>
+        </div>
+        <div class="filter-group">
+          <label><i class="fas fa-user-check"></i> 在职状态：</label>
+          <div class="custom-select">
+            <select v-model="filters.isActive" @change="loadStaff">
+              <option :value="null">全部</option>
+              <option :value="1">在职</option>
+              <option :value="0">离职</option>
+            </select>
+          </div>
+        </div>
+        <div class="filter-group search-box">
+          <i class="fas fa-search"></i>
+          <input 
+            v-model="searchKeyword" 
+            type="text" 
+            placeholder="搜索员工姓名或工号..."
+            @input="filterStaff"
+          />
+        </div>
       </div>
       <div class="table-container">
         <table class="data-table">
@@ -237,11 +236,44 @@
       v-if="sessionHistoryModal.show"
       @close="closeSessionHistoryModal"
     />
+
+    <!-- 确认对话框 -->
+    <ConfirmDialog
+      :show="confirmDialog.show"
+      :type="confirmDialog.type"
+      :title="confirmDialog.title"
+      :message="confirmDialog.message"
+      :details="confirmDialog.details"
+      :warnings="confirmDialog.warnings"
+      :warning-title="confirmDialog.warningTitle"
+      :confirm-text="confirmDialog.confirmText"
+      :cancel-text="confirmDialog.cancelText"
+      :confirm-icon="confirmDialog.confirmIcon"
+      @confirm="confirmDialog.onConfirm"
+      @cancel="confirmDialog.onCancel"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+
+// 确认对话框
+const confirmDialog = ref({
+  show: false,
+  type: 'danger',
+  title: '确认操作',
+  message: '',
+  details: [],
+  warnings: [],
+  warningTitle: '注意',
+  confirmText: '确定',
+  cancelText: '取消',
+  confirmIcon: 'fas fa-check',
+  onConfirm: () => {},
+  onCancel: () => { confirmDialog.value.show = false }
+})
 import StaffModal from '../components/StaffModal.vue'
 import TeamModal from '../components/TeamModal.vue'
 import ShiftModal from '../components/ShiftModal.vue'
@@ -385,22 +417,40 @@ const saveStaff = async (staff) => {
     }
   } catch (e) {
     console.error('保存员工失败:', e)
-    alert('保存失败: ' + e)
+    window.$message.error('保存失败: ' + e)
   }
 }
 
 // 删除员工
-const deleteStaff = async (staff) => {
-  if (confirm(`确定要删除员工 ${staff.name}（${staff.staff_code}）吗？`)) {
-    try {
-      if (window.go && window.go.main && window.go.main.App) {
-        await window.go.main.App.DeleteStaff(staff.id)
-        await loadStaff()
+const deleteStaff = (staff) => {
+  confirmDialog.value = {
+    show: true,
+    type: 'danger',
+    title: '❗ 删除员工',
+    message: `确定要删除员工 ${staff.name}（${staff.staff_code}）吗？`,
+    details: [
+      { icon: '👤', label: '姓名', value: staff.name },
+      { icon: '🆔', label: '工号', value: staff.staff_code },
+      { icon: '👥', label: '班组', value: staff.current_team?.team_name || '未分配' }
+    ],
+    warnings: ['删除后无法恢复，请确认操作'],
+    warningTitle: '⚠️ 注意',
+    confirmText: '删除',
+    cancelText: '取消',
+    confirmIcon: 'fas fa-trash',
+    onConfirm: async () => {
+      confirmDialog.value.show = false
+      try {
+        if (window.go && window.go.main && window.go.main.App) {
+          await window.go.main.App.DeleteStaff(staff.id)
+          await loadStaff()
+        }
+      } catch (e) {
+        console.error('删除员工失败:', e)
+        window.$message.error('删除失败: ' + e)
       }
-    } catch (e) {
-      console.error('删除员工失败:', e)
-      alert('删除失败: ' + e)
-    }
+    },
+    onCancel: () => { confirmDialog.value.show = false }
   }
 }
 
@@ -443,7 +493,7 @@ const saveTeam = async (team) => {
     }
   } catch (e) {
     console.error('保存班组失败:', e)
-    alert('保存失败: ' + e)
+    window.$message.error('保存失败: ' + e)
   }
 }
 
@@ -490,7 +540,7 @@ const handleShift = async (data) => {
   try {
     if (!window.go || !window.go.main || !window.go.main.App) {
       console.error('❌ Wails Go 对象未加载')
-      alert('系统未就绪，请稍后重试')
+      window.$message.warning('系统未就绪，请稍后重试')
       return
     }
     
@@ -604,7 +654,7 @@ const handleShift = async (data) => {
       
       console.log('🔄 刷新数据...')
       closeShiftModal()
-      alert('班次登记成功！')
+      window.$message.success('班次登记成功！')
       
       // 等待一下确保数据库已更新
       await new Promise(resolve => setTimeout(resolve, 500))
@@ -625,11 +675,11 @@ const handleShift = async (data) => {
         if (leaveCount > 0) details.push(`${leaveCount}人移出班组`)
         message += ` (${details.join('，')})`
       }
-      alert(message)
+      window.$message.success(message)
     }
   } catch (e) {
     console.error('❌ 换班失败:', e)
-    alert('换班失败: ' + e)
+    window.$message.error('换班失败: ' + e)
   }
 }
 
@@ -637,38 +687,67 @@ const handleShift = async (data) => {
 const handleLogout = async (deviceId) => {
   const session = activeSessions.value.find(s => s.device_id === deviceId)
   if (!session) {
-    alert('该设备当前没有活动班次')
+    window.$message.warning('该设备当前没有活动班次')
     return
   }
 
-  // 获取设备名称
-  let deviceName = `设备${deviceId}`
+  // 计算已工作时长
+  let duration = '-'
+  if (session.login_time) {
+    const diffMs = new Date() - new Date(session.login_time)
+    const diffMin = Math.floor(diffMs / 60000)
+    duration = `${Math.floor(diffMin / 60)}h${diffMin % 60}m`
+  }
+
+  // 解析员工姓名
+  let staffNames = '-'
   try {
-    if (window.go && window.go.main && window.go.main.App) {
-      const devices = await window.go.main.App.GetAllDevices()
-      const device = devices.find(d => d.id === deviceId)
-      if (device) {
-        deviceName = device.device_name
+    const ids = JSON.parse(session.staff_ids || '[]')
+    const names = ids.map(id => {
+      const s = staffList.value.find(st => st.id === id)
+      return s ? s.name : `#${id}`
+    })
+    if (names.length) staffNames = names.join('、')
+  } catch (_) {}
+
+  const deviceName = session.device_name || `设备${deviceId}`
+  const teamName = session.team?.team_name || '-'
+
+  confirmDialog.value = {
+    show: true,
+    type: 'danger',
+    title: '⚠️ 确认结束班次',
+    message: `确定要结束【${deviceName}】的当前班次吗？`,
+    details: [
+      { icon: '🏭', label: '设备', value: deviceName },
+      { icon: '👥', label: '班组', value: teamName },
+      { icon: '👷', label: '人员', value: staffNames },
+      { icon: '⏱️', label: '已工作', value: duration }
+    ],
+    warnings: [
+      '班次将被标记为结束并记录工作时长',
+      '该设备可以开始新的班次',
+      '员工仍保持在原班组中'
+    ],
+    warningTitle: '💡 提示',
+    confirmText: '确认结束',
+    cancelText: '取消',
+    confirmIcon: 'fas fa-power-off',
+    onConfirm: async () => {
+      confirmDialog.value.show = false
+      try {
+        if (window.go && window.go.main && window.go.main.App) {
+          await window.go.main.App.DeviceLogout(deviceId)
+          await loadActiveSessions()
+          closeActiveDevicesModal()
+          window.$message.success('班次已结束！')
+        }
+      } catch (e) {
+        console.error('结束班次失败:', e)
+        window.$message.error('结束班次失败: ' + e)
       }
-    }
-  } catch (e) {
-    console.error('获取设备名称失败:', e)
-  }
-
-  if (!confirm(`确定要结束【${deviceName}】的当前班次吗？`)) {
-    return
-  }
-
-  try {
-    if (window.go && window.go.main && window.go.main.App) {
-      await window.go.main.App.DeviceLogout(deviceId)
-      await loadActiveSessions()
-      closeActiveDevicesModal()
-      alert('班次已结束！')
-    }
-  } catch (e) {
-    console.error('结束班次失败:', e)
-    alert('结束班次失败: ' + e)
+    },
+    onCancel: () => { confirmDialog.value.show = false }
   }
 }
 
@@ -794,8 +873,9 @@ onMounted(async () => {
 .filter-bar {
   display: flex;
   gap: 20px;
-  margin-bottom: 24px;
+  padding: 16px 20px;
   flex-wrap: wrap;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
 }
 
 .filter-group {

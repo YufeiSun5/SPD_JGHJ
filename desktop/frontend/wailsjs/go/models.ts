@@ -447,6 +447,26 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class BatchRegenerateResult {
+	    date: string;
+	    shift_id: number;
+	    device_id: number;
+	    ok: boolean;
+	    error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BatchRegenerateResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.date = source["date"];
+	        this.shift_id = source["shift_id"];
+	        this.device_id = source["device_id"];
+	        this.ok = source["ok"];
+	        this.error = source["error"];
+	    }
+	}
 	export class BreakTime {
 	    id: number;
 	    name: string;
@@ -748,7 +768,272 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class ShiftBreak {
+	    id: number;
+	    shift_id: number;
+	    name: string;
+	    start_hour: number;
+	    start_min: number;
+	    end_hour: number;
+	    end_min: number;
 	
+	    static createFrom(source: any = {}) {
+	        return new ShiftBreak(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.shift_id = source["shift_id"];
+	        this.name = source["name"];
+	        this.start_hour = source["start_hour"];
+	        this.start_min = source["start_min"];
+	        this.end_hour = source["end_hour"];
+	        this.end_min = source["end_min"];
+	    }
+	}
+	export class LogicalDayShift {
+	    id: number;
+	    schedule_id: number;
+	    name: string;
+	    start_hour: number;
+	    start_min: number;
+	    end_hour: number;
+	    end_min: number;
+	    is_active: boolean;
+	    sort_order: number;
+	    breaks: ShiftBreak[];
+	    has_arrived: boolean;
+	    is_current: boolean;
+	    logical_date: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LogicalDayShift(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.schedule_id = source["schedule_id"];
+	        this.name = source["name"];
+	        this.start_hour = source["start_hour"];
+	        this.start_min = source["start_min"];
+	        this.end_hour = source["end_hour"];
+	        this.end_min = source["end_min"];
+	        this.is_active = source["is_active"];
+	        this.sort_order = source["sort_order"];
+	        this.breaks = this.convertValues(source["breaks"], ShiftBreak);
+	        this.has_arrived = source["has_arrived"];
+	        this.is_current = source["is_current"];
+	        this.logical_date = source["logical_date"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
+	export class ShiftConfig {
+	    id: number;
+	    schedule_id: number;
+	    name: string;
+	    start_hour: number;
+	    start_min: number;
+	    end_hour: number;
+	    end_min: number;
+	    is_active: boolean;
+	    sort_order: number;
+	    breaks: ShiftBreak[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ShiftConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.schedule_id = source["schedule_id"];
+	        this.name = source["name"];
+	        this.start_hour = source["start_hour"];
+	        this.start_min = source["start_min"];
+	        this.end_hour = source["end_hour"];
+	        this.end_min = source["end_min"];
+	        this.is_active = source["is_active"];
+	        this.sort_order = source["sort_order"];
+	        this.breaks = this.convertValues(source["breaks"], ShiftBreak);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ShiftDeviceOEE {
+	    device_name: string;
+	    availability_pct: number;
+	    performance_pct: number;
+	    quality_pct: number;
+	    oee_pct: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ShiftDeviceOEE(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.device_name = source["device_name"];
+	        this.availability_pct = source["availability_pct"];
+	        this.performance_pct = source["performance_pct"];
+	        this.quality_pct = source["quality_pct"];
+	        this.oee_pct = source["oee_pct"];
+	    }
+	}
+	export class ShiftOEESummary {
+	    shift_name: string;
+	    start_label: string;
+	    end_label: string;
+	    is_current: boolean;
+	    has_arrived: boolean;
+	    devices: ShiftDeviceOEE[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ShiftOEESummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.shift_name = source["shift_name"];
+	        this.start_label = source["start_label"];
+	        this.end_label = source["end_label"];
+	        this.is_current = source["is_current"];
+	        this.has_arrived = source["has_arrived"];
+	        this.devices = this.convertValues(source["devices"], ShiftDeviceOEE);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ShiftQualitySummary {
+	    shift_name: string;
+	    start_label: string;
+	    end_label: string;
+	    is_current: boolean;
+	    has_arrived: boolean;
+	    devices: database.DeviceQualityStat[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ShiftQualitySummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.shift_name = source["shift_name"];
+	        this.start_label = source["start_label"];
+	        this.end_label = source["end_label"];
+	        this.is_current = source["is_current"];
+	        this.has_arrived = source["has_arrived"];
+	        this.devices = this.convertValues(source["devices"], database.DeviceQualityStat);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ShiftScheduleConfig {
+	    id: number;
+	    name: string;
+	    sort_order: number;
+	    is_active: boolean;
+	    shifts: ShiftConfig[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ShiftScheduleConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.sort_order = source["sort_order"];
+	        this.is_active = source["is_active"];
+	        this.shifts = this.convertValues(source["shifts"], ShiftConfig);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class TagData {
 	    var_name: string;
 	    display_name: string;
@@ -1044,6 +1329,90 @@ export namespace models {
 		    return a;
 		}
 	}
+	export class ProShiftSnapshot {
+	    id: number;
+	    snapshot_date: string;
+	    device_id: number;
+	    device_name: string;
+	    schedule_id: number;
+	    shift_id: number;
+	    shift_name: string;
+	    shift_start: time.Time;
+	    shift_end: time.Time;
+	    break_config: string;
+	    cycle_time: number;
+	    plan_work_sec: number;
+	    total_qty: number;
+	    ok_qty: number;
+	    ng_qty: number;
+	    device_run_sec: number;
+	    device_idle_sec: number;
+	    device_fault_sec: number;
+	    team_id?: number;
+	    team_name: string;
+	    staff_snapshot: string;
+	    availability_pct: number;
+	    performance_pct: number;
+	    quality_pct: number;
+	    oee_pct: number;
+	    session_id?: number;
+	    sessions_snapshot: string;
+	    created_at: time.Time;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProShiftSnapshot(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.snapshot_date = source["snapshot_date"];
+	        this.device_id = source["device_id"];
+	        this.device_name = source["device_name"];
+	        this.schedule_id = source["schedule_id"];
+	        this.shift_id = source["shift_id"];
+	        this.shift_name = source["shift_name"];
+	        this.shift_start = this.convertValues(source["shift_start"], time.Time);
+	        this.shift_end = this.convertValues(source["shift_end"], time.Time);
+	        this.break_config = source["break_config"];
+	        this.cycle_time = source["cycle_time"];
+	        this.plan_work_sec = source["plan_work_sec"];
+	        this.total_qty = source["total_qty"];
+	        this.ok_qty = source["ok_qty"];
+	        this.ng_qty = source["ng_qty"];
+	        this.device_run_sec = source["device_run_sec"];
+	        this.device_idle_sec = source["device_idle_sec"];
+	        this.device_fault_sec = source["device_fault_sec"];
+	        this.team_id = source["team_id"];
+	        this.team_name = source["team_name"];
+	        this.staff_snapshot = source["staff_snapshot"];
+	        this.availability_pct = source["availability_pct"];
+	        this.performance_pct = source["performance_pct"];
+	        this.quality_pct = source["quality_pct"];
+	        this.oee_pct = source["oee_pct"];
+	        this.session_id = source["session_id"];
+	        this.sessions_snapshot = source["sessions_snapshot"];
+	        this.created_at = this.convertValues(source["created_at"], time.Time);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class SysStaff {
 	    id: number;
 	    staff_code: string;
@@ -1146,6 +1515,8 @@ export namespace models {
 	    device_code: string;
 	    device_name: string;
 	    identify_key?: string;
+	    schedule_id?: number;
+	    cycle_time?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new SysDevice(source);
@@ -1158,6 +1529,8 @@ export namespace models {
 	        this.device_code = source["device_code"];
 	        this.device_name = source["device_name"];
 	        this.identify_key = source["identify_key"];
+	        this.schedule_id = source["schedule_id"];
+	        this.cycle_time = source["cycle_time"];
 	    }
 	}
 	export class SysDeviceStatus {

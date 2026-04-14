@@ -72,6 +72,21 @@
 - **JP**: DB 初期化、ゲートウェイ設定、ホットリロード確認、Wails ビルド、デスクトップ配布物作成、SQL 修復手順のような、反復可能で手順が明確な内容は運用ドキュメントへ置くこと。
 
 ## 7. 通用执行规则 (Tool-Agnostic Execution Rules)
+
+### 动手前必读（强制，不可跳过）
+- **CN**: 每次开始任何代码改动、功能新增、文档更新之前，必须先完成以下两步：
+  1. 读取 `MEMORY.md` 全文，了解当前项目进度、已落地事项、已知约束；
+  2. 读取 `instructions/` 目录下与本次改动相关的规范文件（后端改动读 `backend-go-wails-scada.instructions.md`，前端改动读 `frontend-wails-vue.instructions.md`，代码风格与注释读 `code-style.instructions.md`）。
+  未完成以上两步不得开始修改代码或文件。
+- **EN**: Before starting any code change, feature addition, or documentation update, you MUST first:
+  1. Read `MEMORY.md` in full to understand current project progress, completed items, and known constraints;
+  2. Read the relevant files under `instructions/` for this change (backend → `backend-go-wails-scada.instructions.md`; frontend → `frontend-wails-vue.instructions.md`; style/comments → `code-style.instructions.md`).
+  Do NOT begin modifying code or files until both steps are done.
+- **JP**: コード変更・機能追加・ドキュメント更新を始める前に、必ず次の2ステップを完了すること：
+  1. `MEMORY.md` を全文読み、現在のプロジェクト進捗・完了事項・既知の制約を把握する；
+  2. `instructions/` 配下の関連ファイルを読む（バックエンド変更 → `backend-go-wails-scada.instructions.md`、フロント変更 → `frontend-wails-vue.instructions.md`、スタイル/注釈 → `code-style.instructions.md`）。
+  この2ステップを完了するまでコードやファイルの変更を開始してはならない。
+
 - **CN**: 本仓库的长期事实来源以 `AGENTS.md`、`MEMORY.md`、`docs/项目架构总览.md`、`docs/启动说明.md` 及核心代码实现为准。旧 README 中若存在与当前桌面架构不一致的内容，应优先相信当前实现而不是旧说明。
 - **EN**: Long-lived repository truth comes from `AGENTS.md`, `MEMORY.md`, `docs/项目架构总览.md`, `docs/启动说明.md`, and the core implementation. If the old README disagrees with the current desktop architecture, trust the current implementation over stale prose.
 - **JP**: 本リポジトリの長期的な正本は `AGENTS.md`、`MEMORY.md`、`docs/项目架构总览.md`、`docs/启动说明.md`、およびコア実装です。古い README が現行デスクトップ構成と食い違う場合、古い説明ではなく現行実装を優先すること。
