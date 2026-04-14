@@ -1280,6 +1280,7 @@ ORDER BY device_id, hour_idx`,
 	}
 	return results, query, nil
 }
+
 // ========================================================
 // 班次窗口产量聚合（防复位回跳版，供快照生成复用）
 // Shift-window production aggregation with anti-reset-bounce logic (shared by snapshot generation).
@@ -1297,16 +1298,21 @@ type ShiftWindowProdResult struct {
 
 // GetShiftWindowProduction 聚合指定时间窗口内单个设备的产量、NG、良品数。
 // CN: 产量计数器采用与 GetHourlyProductionAccurate/GetMonthlyProductionAccurate 完全一致的
-//     "防复位回跳"规则：
-//       1. prev_val = 0 且 last_nonzero_val IS NOT NULL 且 val >= last_nonzero_val
-//          → delta = val - last_nonzero_val（设备复位后首次上报，相对于复位前最后有效值）
-//       2. val >= prev_val → delta = val - prev_val（正常累加）
-//       3. 其余（如清零后 val < last_nonzero_val）→ delta = val（当次绝对值当增量，即设备被设置为新基点）
-//     NG 加/减按钮保持现状：val=1 脉冲计数，不做边沿去重。
+//
+//	"防复位回跳"规则：
+//	  1. prev_val = 0 且 last_nonzero_val IS NOT NULL 且 val >= last_nonzero_val
+//	     → delta = val - last_nonzero_val（设备复位后首次上报，相对于复位前最后有效值）
+//	  2. val >= prev_val → delta = val - prev_val（正常累加）
+//	  3. 其余（如清零后 val < last_nonzero_val）→ delta = val（当次绝对值当增量，即设备被设置为新基点）
+//	NG 加/减按钮保持现状：val=1 脉冲计数，不做边沿去重。
+//
 // EN: Production counter uses the same anti-reset-bounce rule as GetHourlyProductionAccurate.
-//     NG add/sub buttons remain as pulse-counts (no edge-dedup this round).
+//
+//	NG add/sub buttons remain as pulse-counts (no edge-dedup this round).
+//
 // JP: 産量カウンタは GetHourlyProductionAccurate と同一のリセット跳ね返り防止規則を適用。
-//     NG ボタンは今回未変更（パルスカウント方式継続）。
+//
+//	NG ボタンは今回未変更（パルスカウント方式継続）。
 //
 // cfg: 设备变量映射（生产变量 ID / NG 加减变量 ID）。
 // shiftStart / shiftEnd: 班次时间窗口（含首端，不含末端，与 SQL BETWEEN 语义一致）。

@@ -1396,19 +1396,22 @@ func (a *App) GetAllShiftsOEESummary() ([]ShiftOEESummary, error) {
 // GetAllShiftsQualitySummary 返回当前逻辑日所有已到达班次的良品率汇总（含当班）
 //
 // CN: 遍历 has_arrived==true 的班次，对每台有 OEE 配置的设备调用 GetShiftWindowProduction，
-//     口径与班次快照（pro_shift_snapshots.quality_pct）完全一致，均来自 sys_data_history。
-//     之前的实现调用 GetShiftQualityByRun（pro_production_runs 工单运行记录），
-//     与快照数据源不同导致驾驶舱良品率和班组追溯页面数值对不上，现已修正。
-//     跨零点班次：endMin <= startMin 时 shiftEnd 加 24h。
+//
+//	口径与班次快照（pro_shift_snapshots.quality_pct）完全一致，均来自 sys_data_history。
+//	之前的实现调用 GetShiftQualityByRun（pro_production_runs 工单运行记录），
+//	与快照数据源不同导致驾驶舱良品率和班组追溯页面数值对不上，现已修正。
+//	跨零点班次：endMin <= startMin 时 shiftEnd 加 24h。
 //
 // EN: For each arrived shift, calls GetShiftWindowProduction per configured device.
-//     Data source is sys_data_history, identical to snapshot quality_pct calculation.
-//     Previous impl used pro_production_runs (GetShiftQualityByRun), causing mismatch with
-//     shift report; now unified with snapshot source.
+//
+//	Data source is sys_data_history, identical to snapshot quality_pct calculation.
+//	Previous impl used pro_production_runs (GetShiftQualityByRun), causing mismatch with
+//	shift report; now unified with snapshot source.
 //
 // JP: 到達済シフトごとに設備別 GetShiftWindowProduction を呼び出す。
-//     データソースは sys_data_history で、スナップショットの quality_pct と完全に一致する。
-//     以前は pro_production_runs を参照していたため班組追跡画面と乖離していた。修正済み。
+//
+//	データソースは sys_data_history で、スナップショットの quality_pct と完全に一致する。
+//	以前は pro_production_runs を参照していたため班組追跡画面と乖離していた。修正済み。
 func (a *App) GetAllShiftsQualitySummary() ([]ShiftQualitySummary, error) {
 	ldShifts, err := a.GetShiftsForLogicalDay()
 	if err != nil {
