@@ -7,7 +7,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"gin-mqtt-pgsql/core"
@@ -752,29 +751,31 @@ func (a *App) GetAllVariables() ([]database.VariableRow, error) {
 
 // UpdateVariable 更新变量配置
 func (a *App) UpdateVariable(variable database.VariableRow) error {
+	fields := database.AppendVariableAcquisitionConfig(map[string]interface{}{
+		"device_id":      variable.DeviceID,
+		"var_name":       variable.VarName,
+		"display_name":   variable.DisplayName,
+		"json_path":      variable.JSONPath,
+		"data_type":      variable.DataType,
+		"rw_mode":        variable.RWMode,
+		"unit":           variable.Unit,
+		"scale_factor":   variable.ScaleFactor,
+		"offset_val":     variable.OffsetVal,
+		"store_mode":     variable.StoreMode,
+		"store_cycle":    variable.StoreCycle,
+		"store_deadband": variable.StoreDeadband,
+		"alarm_enable":   variable.AlarmEnable,
+		"limit_hh":       variable.LimitHH,
+		"limit_h":        variable.LimitH,
+		"limit_l":        variable.LimitL,
+		"limit_ll":       variable.LimitLL,
+		"deadband":       variable.Deadband,
+		"alarm_msg":      variable.AlarmMsg,
+	}, variable)
+
 	result := database.DB.Table("sys_variables").
 		Where("id = ?", variable.ID).
-		Updates(map[string]interface{}{
-			"device_id":      variable.DeviceID,
-			"var_name":       variable.VarName,
-			"display_name":   variable.DisplayName,
-			"json_path":      variable.JSONPath,
-			"data_type":      variable.DataType,
-			"rw_mode":        variable.RWMode,
-			"unit":           variable.Unit,
-			"scale_factor":   variable.ScaleFactor,
-			"offset_val":     variable.OffsetVal,
-			"store_mode":     variable.StoreMode,
-			"store_cycle":    variable.StoreCycle,
-			"store_deadband": variable.StoreDeadband,
-			"alarm_enable":   variable.AlarmEnable,
-			"limit_hh":       variable.LimitHH,
-			"limit_h":        variable.LimitH,
-			"limit_l":        variable.LimitL,
-			"limit_ll":       variable.LimitLL,
-			"deadband":       variable.Deadband,
-			"alarm_msg":      variable.AlarmMsg,
-		})
+		Updates(fields)
 
 	if result.Error != nil {
 		return fmt.Errorf("更新变量配置失败: %v", result.Error)
@@ -804,29 +805,31 @@ func (a *App) BatchUpdateVariables(variables []database.VariableRow) error {
 	}()
 
 	for _, variable := range variables {
+		fields := database.AppendVariableAcquisitionConfig(map[string]interface{}{
+			"device_id":      variable.DeviceID,
+			"var_name":       variable.VarName,
+			"display_name":   variable.DisplayName,
+			"json_path":      variable.JSONPath,
+			"data_type":      variable.DataType,
+			"rw_mode":        variable.RWMode,
+			"unit":           variable.Unit,
+			"scale_factor":   variable.ScaleFactor,
+			"offset_val":     variable.OffsetVal,
+			"store_mode":     variable.StoreMode,
+			"store_cycle":    variable.StoreCycle,
+			"store_deadband": variable.StoreDeadband,
+			"alarm_enable":   variable.AlarmEnable,
+			"limit_hh":       variable.LimitHH,
+			"limit_h":        variable.LimitH,
+			"limit_l":        variable.LimitL,
+			"limit_ll":       variable.LimitLL,
+			"deadband":       variable.Deadband,
+			"alarm_msg":      variable.AlarmMsg,
+		}, variable)
+
 		result := tx.Table("sys_variables").
 			Where("id = ?", variable.ID).
-			Updates(map[string]interface{}{
-				"device_id":      variable.DeviceID,
-				"var_name":       variable.VarName,
-				"display_name":   variable.DisplayName,
-				"json_path":      variable.JSONPath,
-				"data_type":      variable.DataType,
-				"rw_mode":        variable.RWMode,
-				"unit":           variable.Unit,
-				"scale_factor":   variable.ScaleFactor,
-				"offset_val":     variable.OffsetVal,
-				"store_mode":     variable.StoreMode,
-				"store_cycle":    variable.StoreCycle,
-				"store_deadband": variable.StoreDeadband,
-				"alarm_enable":   variable.AlarmEnable,
-				"limit_hh":       variable.LimitHH,
-				"limit_h":        variable.LimitH,
-				"limit_l":        variable.LimitL,
-				"limit_ll":       variable.LimitLL,
-				"deadband":       variable.Deadband,
-				"alarm_msg":      variable.AlarmMsg,
-			})
+			Updates(fields)
 
 		if result.Error != nil {
 			tx.Rollback()
@@ -870,7 +873,32 @@ func (a *App) CreateVariable(variable database.VariableRow) error {
 		variable.ScaleFactor = 1.0
 	}
 
-	result := database.DB.Table("sys_variables").Create(&variable)
+	fields := database.AppendVariableAcquisitionConfig(map[string]interface{}{
+		"device_id":      variable.DeviceID,
+		"var_name":       variable.VarName,
+		"display_name":   variable.DisplayName,
+		"json_path":      variable.JSONPath,
+		"data_type":      variable.DataType,
+		"rw_mode":        variable.RWMode,
+		"unit":           variable.Unit,
+		"scale_factor":   variable.ScaleFactor,
+		"offset_val":     variable.OffsetVal,
+		"store_mode":     variable.StoreMode,
+		"store_cycle":    variable.StoreCycle,
+		"store_deadband": variable.StoreDeadband,
+		"alarm_enable":   variable.AlarmEnable,
+		"limit_hh":       variable.LimitHH,
+		"limit_h":        variable.LimitH,
+		"limit_l":        variable.LimitL,
+		"limit_ll":       variable.LimitLL,
+		"deadband":       variable.Deadband,
+		"alarm_msg":      variable.AlarmMsg,
+	}, variable)
+
+	// CN: 新增变量同样走可选列过滤，老表没有防抖列时仍能创建基础点位。
+	// EN: Creation also filters optional columns, so legacy tables without debounce fields can still create base points.
+	// JP: 新規作成も任意列を絞り込み、旧テーブルに防振列がなくても基本点位を作成できる。
+	result := database.DB.Table("sys_variables").Create(fields)
 	if result.Error != nil {
 		return fmt.Errorf("创建变量配置失败: %v", result.Error)
 	}
@@ -1323,16 +1351,9 @@ func (a *App) GetAllShiftsOEESummary() ([]ShiftOEESummary, error) {
 		return nil, fmt.Errorf("获取逻辑日班次失败: %w", err)
 	}
 
-	// 全局 CT（各设备无单独配置时 fallback）
-	ct, err := a.GetProductionCoefficient()
-	if err != nil || ct <= 0 {
-		ct = 100.0
-	}
-
-	// 读取所有设备（含 cycle_time）
-	var allDevices []models.SysDevice
-	if err := database.DB.Select("id, device_name, schedule_id, cycle_time").Find(&allDevices).Error; err != nil {
-		allDevices = nil
+	cfgSet, cfgErr := a.getOEEDeviceConfigSet()
+	if cfgErr != nil {
+		fmt.Printf("⚠️ 读取设备级OEE配置失败，使用默认配置: %v\n", cfgErr)
 	}
 
 	result := make([]ShiftOEESummary, 0, len(ldShifts))
@@ -1341,25 +1362,7 @@ func (a *App) GetAllShiftsOEESummary() ([]ShiftOEESummary, error) {
 			continue
 		}
 
-		// 构建该班次的 OEE 配置
-		var devCfgs []database.DeviceOEEConfig
-		if len(allDevices) > 0 {
-			for _, d := range allDevices {
-				devCT := ct
-				if d.CycleTime != nil && *d.CycleTime > 0 {
-					devCT = *d.CycleTime
-				}
-				if cfg := hardcodedOEEConfig(d.ID, devCT); cfg != nil {
-					devCfgs = append(devCfgs, *cfg)
-				}
-			}
-		}
-		if len(devCfgs) == 0 {
-			devCfgs = []database.DeviceOEEConfig{
-				hardcodedOEEConfigDefault(1, ct),
-				hardcodedOEEConfigDefault(2, ct),
-			}
-		}
+		devCfgs := cfgSet.configsForSchedule(s.ScheduleID)
 
 		window, breaks := buildShiftOEEWindow(s)
 		rows, err := database.GetHourlyOEE(devCfgs, breaks, window)
@@ -1518,7 +1521,104 @@ func containsStr(s, substr string) bool {
 	}()
 }
 
-// getOEEConfigs 读取OEE所需的配置（设备配置和休息时间），供内部复用
+type oeeDeviceConfigSet struct {
+	All        []database.DeviceOEEConfig
+	BySchedule map[int][]database.DeviceOEEConfig
+	Unassigned []database.DeviceOEEConfig
+}
+
+func (s *oeeDeviceConfigSet) configsForSchedule(scheduleID int) []database.DeviceOEEConfig {
+	if s == nil {
+		return nil
+	}
+	cfgs := make([]database.DeviceOEEConfig, 0, len(s.BySchedule[scheduleID])+len(s.Unassigned))
+	cfgs = append(cfgs, s.BySchedule[scheduleID]...)
+	cfgs = append(cfgs, s.Unassigned...)
+	if len(cfgs) == 0 {
+		cfgs = append(cfgs, s.All...)
+	}
+	return cfgs
+}
+
+func (a *App) getGlobalCycleTimeFallback() float64 {
+	configPath, err := a.getConfigFilePath()
+	if err != nil {
+		return 100.0
+	}
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return 100.0
+	}
+	var config UserConfig
+	if err := json.Unmarshal(data, &config); err != nil || config.ProductionCoefficient <= 0 {
+		return 100.0
+	}
+	return config.ProductionCoefficient
+}
+
+func defaultOEEDeviceConfigSet(ct float64) *oeeDeviceConfigSet {
+	cfgs := []database.DeviceOEEConfig{
+		hardcodedOEEConfigDefault(1, ct),
+		hardcodedOEEConfigDefault(2, ct),
+	}
+	return &oeeDeviceConfigSet{
+		All:        cfgs,
+		BySchedule: map[int][]database.DeviceOEEConfig{},
+		Unassigned: cfgs,
+	}
+}
+
+// getOEEDeviceConfigSet 统一读取设备级 OEE 配置。
+//
+// CN: OEE 只从 sys_devices.cycle_time 读取设备级 CT，未配置时才回退到全局默认 CT。
+//     前端不再传入 OEE configs，避免两台设备被同一个旧节拍覆盖。
+// EN: OEE reads per-device CT from sys_devices.cycle_time, falling back to the global default only when empty.
+//     The frontend no longer supplies OEE configs, so two devices cannot be overwritten by one legacy CT.
+// JP: OEE は sys_devices.cycle_time から設備別 CT を読み、未設定時のみグローバル既定値へ戻す。
+//     フロントから OEE configs は渡さず、2台設備が旧単一 CT で上書きされることを防ぐ。
+func (a *App) getOEEDeviceConfigSet() (*oeeDeviceConfigSet, error) {
+	fallbackCT := a.getGlobalCycleTimeFallback()
+	fallback := defaultOEEDeviceConfigSet(fallbackCT)
+	if database.DB == nil {
+		return fallback, fmt.Errorf("数据库未连接")
+	}
+
+	var devices []models.SysDevice
+	if err := database.DB.Select("id, device_name, schedule_id, cycle_time").Order("id").Find(&devices).Error; err != nil {
+		return fallback, err
+	}
+
+	result := &oeeDeviceConfigSet{
+		All:        []database.DeviceOEEConfig{},
+		BySchedule: map[int][]database.DeviceOEEConfig{},
+		Unassigned: []database.DeviceOEEConfig{},
+	}
+	for _, dev := range devices {
+		ct := fallbackCT
+		if dev.CycleTime != nil && *dev.CycleTime > 0 {
+			ct = *dev.CycleTime
+		}
+		cfg := hardcodedOEEConfig(dev.ID, ct)
+		if cfg == nil {
+			continue
+		}
+		result.All = append(result.All, *cfg)
+		if dev.ScheduleID != nil && *dev.ScheduleID > 0 {
+			result.BySchedule[*dev.ScheduleID] = append(result.BySchedule[*dev.ScheduleID], *cfg)
+		} else {
+			result.Unassigned = append(result.Unassigned, *cfg)
+		}
+	}
+	if len(result.All) == 0 {
+		return fallback, nil
+	}
+	return result, nil
+}
+
+// getOEEConfigs 读取OEE所需的配置（设备配置和休息时间），供内部复用。
+// CN: 设备配置来自 sys_devices.cycle_time；全局配置只作为未配置设备的 CT 兜底。
+// EN: Device config comes from sys_devices.cycle_time; the global config is only a CT fallback.
+// JP: 設備設定は sys_devices.cycle_time から取得し、グローバル設定は未設定設備の CT フォールバックのみ。
 func (a *App) getOEEConfigs() ([]database.DeviceOEEConfig, []database.BreakTimeConfig, error) {
 	// 读取休息时间配置
 	breakTimes, err := a.GetBreakTimes()
@@ -1537,16 +1637,11 @@ func (a *App) getOEEConfigs() ([]database.DeviceOEEConfig, []database.BreakTimeC
 		}
 	}
 
-	// 读取理论节拍（CT），用于计算性能稼动率
-	ct, err := a.GetProductionCoefficient()
-	if err != nil || ct <= 0 {
-		ct = 100.0
+	cfgSet, cfgErr := a.getOEEDeviceConfigSet()
+	if cfgErr != nil {
+		fmt.Printf("⚠️ 读取设备级OEE配置失败，使用默认配置: %v\n", cfgErr)
 	}
-	deviceConfigs := []database.DeviceOEEConfig{
-		{DeviceID: 1, DeviceName: "设备#1", VarOK: 1, VarNGAdd: 72, VarNGSub: 71, CycleTime: ct},
-		{DeviceID: 2, DeviceName: "设备#2", VarOK: 95, VarNGAdd: 97, VarNGSub: 96, CycleTime: ct},
-	}
-	return deviceConfigs, dbBreakTimes, nil
+	return cfgSet.All, dbBreakTimes, nil
 }
 
 // hardcodedOEEConfig 返回指定设备 ID 的 OEE 变量配置（当前为固定值，后续可改为 DB 配置）
@@ -1587,10 +1682,10 @@ func buildScheduleOEEWindow(shifts []LogicalDayShift, logicalDate string) (*data
 	firstShift := shifts[0]
 	lastShift := shifts[len(shifts)-1]
 
-	workStartMin := firstShift.StartHour*60 + firstShift.StartMin
+	workStartMin := firstShift.StartHour*60 + firstShift.StartMin + firstShift.CalendarDayOffset*24*60
 
-	lastEndMin := lastShift.EndHour*60 + lastShift.EndMin
-	lastStartMin := lastShift.StartHour*60 + lastShift.StartMin
+	lastEndMin := lastShift.EndHour*60 + lastShift.EndMin + lastShift.CalendarDayOffset*24*60
+	lastStartMin := lastShift.StartHour*60 + lastShift.StartMin + lastShift.CalendarDayOffset*24*60
 	if lastEndMin < lastStartMin {
 		lastEndMin += 24 * 60 // 末班跨零点
 	}
@@ -1614,8 +1709,8 @@ func buildScheduleOEEWindow(shifts []LogicalDayShift, logicalDate string) (*data
 	prevSpanEnd := -1
 	for _, s := range shifts {
 		_, bkCfgs := buildShiftOEEWindow(s)
-		sStartMin := s.StartHour*60 + s.StartMin
-		sEndRaw := s.EndHour*60 + s.EndMin
+		sStartMin := s.StartHour*60 + s.StartMin + s.CalendarDayOffset*24*60
+		sEndRaw := s.EndHour*60 + s.EndMin + s.CalendarDayOffset*24*60
 		sSpanEnd := sEndRaw
 		if sEndRaw < sStartMin {
 			sSpanEnd = sEndRaw + 24*60
@@ -1650,13 +1745,19 @@ func buildShiftOEEWindow(s LogicalDayShift) (*database.ShiftWindow, []database.B
 	startMinTotal := s.StartHour*60 + s.StartMin
 	endMinTotal := s.EndHour*60 + s.EndMin
 
+	// calendarDayOffset 偏移：三班等在逻辑日+1 自然日运行的班次，全段时间均平移 24h
+	// EN: Shifts running on logical_date+1 calendar day (e.g., 三班 0:00-7:40) get all hours offset by +24.
+	// JP: 論理日+1日目で動くシフト（三班 0:00-7:40 等）は全時刻に +24h を加算する。
+	hourOffset := s.CalendarDayOffset * 24
+
 	// 跨零点判定：结束分钟数 < 开始分钟数（例如 22:00→06:00，360 < 1320）
 	crossMidnight := endMinTotal < startMinTotal
 
+	startHourSQL := s.StartHour + hourOffset
 	// 跨日时，WorkEnd 用 "30:00" 等超 24 格式，使 ADDTIME 指向次日
-	endHourSQL := s.EndHour
+	endHourSQL := s.EndHour + hourOffset
 	if crossMidnight {
-		endHourSQL = s.EndHour + 24
+		endHourSQL += 24
 	}
 
 	// HourEnd = 最后时间桶 hour_idx 的上限（WHERE hour_idx < HourEnd）
@@ -1664,15 +1765,15 @@ func buildShiftOEEWindow(s LogicalDayShift) (*database.ShiftWindow, []database.B
 	if s.EndMin > 0 {
 		hourEndLimit = endHourSQL + 1
 	}
-	if hourEndLimit <= s.StartHour {
-		hourEndLimit = s.StartHour + 1
+	if hourEndLimit <= startHourSQL {
+		hourEndLimit = startHourSQL + 1
 	}
 
 	window := &database.ShiftWindow{
-		WorkStart:   fmt.Sprintf("%02d:%02d", s.StartHour, s.StartMin),
+		WorkStart:   fmt.Sprintf("%02d:%02d", startHourSQL, s.StartMin),
 		WorkEnd:     fmt.Sprintf("%02d:%02d", endHourSQL, s.EndMin),
 		LogicalDate: s.LogicalDate,
-		HourStart:   s.StartHour,
+		HourStart:   startHourSQL,
 		HourEnd:     hourEndLimit,
 	}
 
@@ -1680,7 +1781,8 @@ func buildShiftOEEWindow(s LogicalDayShift) (*database.ShiftWindow, []database.B
 	for _, b := range s.Breaks {
 		bStartMin := b.StartHour*60 + b.StartMin
 		bEndMin := b.EndHour*60 + b.EndMin
-		startH, endH := b.StartHour, b.EndHour
+		startH := b.StartHour + hourOffset
+		endH := b.EndHour + hourOffset
 
 		if crossMidnight {
 			// 休息段开始落在次日（时钟时间 < 班次开始时间）
@@ -1709,31 +1811,24 @@ func buildShiftOEEWindow(s LogicalDayShift) (*database.ShiftWindow, []database.B
 //
 // CN: 数据流：
 //  1. GetShiftsForLogicalDay → 逻辑日期 + 各活动班次（含休息段）
-//  2. 从 DB 读取设备的 shift_id 关联
-//  3. 按 shift_id 将设备分组
+//  2. 从 DB 读取设备的 schedule_id + cycle_time
+//  3. 按 schedule_id 将设备分组，CT 使用设备级配置
 //  4. 每组单独调用 database.GetHourlyOEE（使用各自班次的时间窗口 + 休息段）
-//  5. 若设备无 shift_id，回退到合并所有班次的宽窗口查询
+//  5. 若设备无 schedule_id，回退到合并所有班次的宽窗口查询
 //
-// EN: Groups devices by their assigned shift, runs per-shift OEE queries, merges results.
-// JP: 設備をシフト別にグループ化し、シフトごとに OEE クエリを実行して結果をマージする。
-func (a *App) GetHourlyOEE(configs []database.DeviceOEEConfig) ([]database.HourlyOEE, error) {
-	ct, err := a.GetProductionCoefficient()
-	if err != nil || ct <= 0 {
-		ct = 100.0
+// EN: Groups devices by schedule_id and reads per-device CT from DB before querying OEE.
+// JP: 設備を schedule_id でグループ化し、DB の設備別 CT を使って OEE を照会する。
+func (a *App) GetHourlyOEE() ([]database.HourlyOEE, error) {
+	cfgSet, cfgErr := a.getOEEDeviceConfigSet()
+	if cfgErr != nil {
+		fmt.Printf("⚠️ 读取设备级OEE配置失败，使用默认配置: %v\n", cfgErr)
 	}
 
 	// 1. 获取逻辑日班次列表
 	ldShifts, err := a.GetShiftsForLogicalDay()
 	if err != nil || len(ldShifts) == 0 {
 		fmt.Printf("⚠️ 无活动班次，OEE使用默认配置: %v\n", err)
-		return database.GetHourlyOEE(nil, nil, nil) // 全部用 GetHourlyOEE 内置默认值
-	}
-
-	// 2. 读取 DB 中所有设备（含 schedule_id 和 cycle_time）
-	var allDevices []models.SysDevice
-	if err := database.DB.Select("id, device_name, schedule_id, cycle_time").Find(&allDevices).Error; err != nil {
-		fmt.Printf("⚠️ 读取设备列表失败，OEE使用默认配置: %v\n", err)
-		return database.GetHourlyOEE(nil, nil, nil)
+		return database.GetHourlyOEE(cfgSet.All, nil, nil)
 	}
 
 	// 3. 构建 scheduleID → []DeviceOEEConfig 映射
@@ -1743,24 +1838,8 @@ func (a *App) GetHourlyOEE(configs []database.DeviceOEEConfig) ([]database.Hourl
 	//     CT prefers device-level config (SysDevice.CycleTime), falls back to global default if NULL.
 	// JP: 設備をスケジュール（ScheduleID）でグループ化。同グループの設備は同一シフトウィンドウを共有する。
 	//     CT はデバイス単位設定を優先し、NULL の場合はグローバルデフォルトにフォールバック。
-	scheduleDeviceMap := map[int][]database.DeviceOEEConfig{}
-	unassigned := []database.DeviceOEEConfig{}
-
-	for _, d := range allDevices {
-		devCT := ct
-		if d.CycleTime != nil && *d.CycleTime > 0 {
-			devCT = *d.CycleTime
-		}
-		cfg := hardcodedOEEConfig(d.ID, devCT)
-		if cfg == nil {
-			continue
-		}
-		if d.ScheduleID != nil && *d.ScheduleID > 0 {
-			scheduleDeviceMap[*d.ScheduleID] = append(scheduleDeviceMap[*d.ScheduleID], *cfg)
-		} else {
-			unassigned = append(unassigned, *cfg)
-		}
-	}
+	scheduleDeviceMap := cfgSet.BySchedule
+	unassigned := cfgSet.Unassigned
 
 	allResults := make([]database.HourlyOEE, 0, 64)
 	logicalDate := ldShifts[0].LogicalDate
@@ -1809,7 +1888,7 @@ func (a *App) GetHourlyOEE(configs []database.DeviceOEEConfig) ([]database.Hourl
 	}
 
 	if len(allResults) == 0 {
-		return database.GetHourlyOEE(nil, nil, nil)
+		return database.GetHourlyOEE(cfgSet.All, nil, nil)
 	}
 	return allResults, nil
 }
@@ -1853,6 +1932,7 @@ func (a *App) DebugOEEDirect() (map[string]interface{}, error) {
 		result[i] = map[string]interface{}{
 			"time_period":      r.TimePeriod,
 			"device_name":      r.DeviceName,
+			"cycle_time":       r.CycleTime,
 			"t_run":            r.TotalRunSec,
 			"t_plan":           r.TotalPlanSec,
 			"total_products":   r.TotalProducts,
@@ -1882,15 +1962,15 @@ func (a *App) DebugOEEDirect() (map[string]interface{}, error) {
 //
 // JP: 各アクティブシフトを独立したウィンドウで OEE クエリし、sort_order 順に返す。フロントがグループ単位で描画できる。
 func (a *App) DebugOEEByShift() ([]map[string]interface{}, error) {
-	dbDeviceConfigs, _, err := a.getOEEConfigs()
-	if err != nil {
-		return nil, fmt.Errorf("DebugOEEByShift读取配置失败: %w", err)
+	cfgSet, cfgErr := a.getOEEDeviceConfigSet()
+	if cfgErr != nil {
+		fmt.Printf("⚠️ DebugOEEByShift读取设备级配置失败，使用默认配置: %v\n", cfgErr)
 	}
 
 	ldShifts, shiftErr := a.GetShiftsForLogicalDay()
 	if shiftErr != nil || len(ldShifts) == 0 {
 		// 无活动班次：降级为单次全天查询，包装成一个伪班次组返回
-		rows, _, err2 := database.GetHourlyOEEWithSQL(dbDeviceConfigs, nil, nil, true)
+		rows, _, err2 := database.GetHourlyOEEWithSQL(cfgSet.All, nil, nil)
 		if err2 != nil {
 			return nil, fmt.Errorf("DebugOEEByShift降级查询失败: %w", err2)
 		}
@@ -1904,8 +1984,11 @@ func (a *App) DebugOEEByShift() ([]map[string]interface{}, error) {
 
 	result := make([]map[string]interface{}, 0, len(ldShifts))
 	for _, s := range ldShifts {
+		if !s.HasArrived {
+			continue
+		}
 		window, breaks := buildShiftOEEWindow(s)
-		rows, _, qErr := database.GetHourlyOEEWithSQL(dbDeviceConfigs, breaks, window, true)
+		rows, _, qErr := database.GetHourlyOEEWithSQL(cfgSet.configsForSchedule(s.ScheduleID), breaks, window)
 		if qErr != nil {
 			return nil, fmt.Errorf("班次%q OEE查询失败: %w", s.Name, qErr)
 		}
@@ -1920,6 +2003,18 @@ func (a *App) DebugOEEByShift() ([]map[string]interface{}, error) {
 			"rows":         oeeDebugRowsToMaps(rows),
 		})
 	}
+	if len(result) == 0 {
+		rows, _, err2 := database.GetHourlyOEEWithSQL(cfgSet.All, nil, nil)
+		if err2 != nil {
+			return nil, fmt.Errorf("DebugOEEByShift兜底查询失败: %w", err2)
+		}
+		return []map[string]interface{}{{
+			"shift_id":    0,
+			"shift_name":  "当前逻辑日（无已到达班次）",
+			"shift_range": "",
+			"rows":        oeeDebugRowsToMaps(rows),
+		}}, nil
+	}
 	return result, nil
 }
 
@@ -1932,6 +2027,7 @@ func oeeDebugRowsToMaps(rows []database.HourlyOEEDebug) []map[string]interface{}
 		result[i] = map[string]interface{}{
 			"time_period":      r.TimePeriod,
 			"device_name":      r.DeviceName,
+			"cycle_time":       r.CycleTime,
 			"t_run":            r.TotalRunSec,
 			"t_plan":           r.TotalPlanSec,
 			"total_products":   r.TotalProducts,
@@ -2521,80 +2617,6 @@ func (a *App) getConfigFilePath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(configDir, "user_config.json"), nil
-}
-
-// GetProductionCoefficient 获取理论节拍系数
-func (a *App) GetProductionCoefficient() (float64, error) {
-	configPath, err := a.getConfigFilePath()
-	if err != nil {
-		return 10.0, err // 默认值
-	}
-
-	// 如果文件不存在，返回默认值
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return 10.0, nil
-	}
-
-	// 读取配置文件
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return 10.0, fmt.Errorf("读取配置文件失败: %v", err)
-	}
-
-	var config UserConfig
-	if err := json.Unmarshal(data, &config); err != nil {
-		return 10.0, fmt.Errorf("解析配置文件失败: %v", err)
-	}
-
-	// 验证值的合理性
-	if config.ProductionCoefficient <= 0 {
-		return 10.0, nil
-	}
-
-	return config.ProductionCoefficient, nil
-}
-
-// SetProductionCoefficient 设置理论节拍系数
-func (a *App) SetProductionCoefficient(coefficient float64) error {
-	if coefficient <= 0 {
-		return fmt.Errorf("系数必须大于0")
-	}
-
-	configPath, err := a.getConfigFilePath()
-	if err != nil {
-		return err
-	}
-
-	// 读取现有配置（如果存在）
-	var config UserConfig
-	if data, err := os.ReadFile(configPath); err == nil {
-		json.Unmarshal(data, &config) // 忽略错误，使用默认值
-	}
-
-	// 更新系数
-	config.ProductionCoefficient = coefficient
-
-	// 保存配置
-	data, err := json.MarshalIndent(config, "", "  ")
-	if err != nil {
-		return fmt.Errorf("序列化配置失败: %v", err)
-	}
-
-	if err := os.WriteFile(configPath, data, 0644); err != nil {
-		return fmt.Errorf("保存配置文件失败: %v", err)
-	}
-
-	return nil
-}
-
-// GetProductionCoefficientFromEnv 从环境变量获取理论节拍（备用方案）
-func (a *App) GetProductionCoefficientFromEnv() float64 {
-	if envVal := os.Getenv("PRODUCTION_COEFFICIENT"); envVal != "" {
-		if val, err := strconv.ParseFloat(envVal, 64); err == nil && val > 0 {
-			return val
-		}
-	}
-	return 10.0 // 默认值
 }
 
 // GetDailyWorkMinutes 获取每日应工作分钟数（扣除休息后）

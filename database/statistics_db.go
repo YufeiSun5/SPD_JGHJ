@@ -726,6 +726,7 @@ type ShiftWindow struct {
 type HourlyOEE struct {
 	TimePeriod    string  `json:"time_period"`      // 时间段（如 "7:00 - 8:00" 或 "=== 全天合计 ==="）
 	DeviceName    string  `json:"device_name"`      // 设备名称
+	CycleTime     float64 `json:"cycle_time"`       // 生效理论节拍（秒/件）
 	TotalRunSec   int     `json:"total_run_sec"`    // 总运行时间（秒）
 	TotalPlanSec  int     `json:"total_plan_sec"`   // 总计划时间（秒）
 	TotalProducts int     `json:"total_products"`   // 总产量
@@ -936,7 +937,7 @@ ProductionStats AS (
     GROUP BY FLOOR(TIMESTAMPDIFF(SECOND, c.target_date, created_at) / 3600), device_id
 ),
 
--- 5. 汇总（t_run 和 t_plan 均扣除休息时间，保证口径一致，时间稼动率不超100%）
+-- 5. 汇总（t_run 和 t_plan 均扣除休息时间，保证口径一致，时间稼动率不超100%%）
 HourDevice AS (
     SELECT h.hour_idx, h.hour_start, h.hour_end, dc.device_id, dc.device_name, dc.cycle_time
     FROM Hours h CROSS JOIN DeviceConfig dc
@@ -973,6 +974,7 @@ CombinedMetrics AS (
 SELECT 
     CASE WHEN hour_idx IS NULL THEN '=== 全天合计 ===' ELSE CONCAT(hour_idx, ':00 - ', hour_idx+1, ':00') END as time_period,
     MAX(device_name) as device_name,
+    MAX(cycle_time) as cycle_time,
     SUM(t_run) as total_run_sec, 
     SUM(t_plan) as total_plan_sec, 
     SUM(q_total) as total_products,
@@ -993,6 +995,7 @@ ORDER BY device_id, hour_idx
 	type RawResult struct {
 		TimePeriod    string  `gorm:"column:time_period"`
 		DeviceName    string  `gorm:"column:device_name"`
+		CycleTime     float64 `gorm:"column:cycle_time"`
 		TotalRunSec   int     `gorm:"column:total_run_sec"`
 		TotalPlanSec  int     `gorm:"column:total_plan_sec"`
 		TotalProducts int     `gorm:"column:total_products"`
@@ -1014,6 +1017,7 @@ ORDER BY device_id, hour_idx
 		result := HourlyOEE{
 			TimePeriod:    raw.TimePeriod,
 			DeviceName:    raw.DeviceName,
+			CycleTime:     raw.CycleTime,
 			TotalRunSec:   raw.TotalRunSec,
 			TotalPlanSec:  raw.TotalPlanSec,
 			TotalProducts: raw.TotalProducts,
@@ -1041,6 +1045,7 @@ ORDER BY device_id, hour_idx
 type HourlyOEEDebug struct {
 	TimePeriod    string  `json:"time_period" gorm:"column:time_period"`
 	DeviceName    string  `json:"device_name" gorm:"column:device_name"`
+	CycleTime     float64 `json:"cycle_time" gorm:"column:cycle_time"`
 	TotalRunSec   int     `json:"total_run_sec" gorm:"column:total_run_sec"`
 	TotalPlanSec  int     `json:"total_plan_sec" gorm:"column:total_plan_sec"`
 	TotalProducts int     `json:"total_products" gorm:"column:total_products"`
@@ -1254,6 +1259,7 @@ CombinedMetrics AS (
 )
 SELECT CASE WHEN hour_idx IS NULL THEN '合计' ELSE CONCAT(hour_idx, ':00-', hour_idx+1, ':00') END as time_period,
     MAX(device_name) as device_name,
+    MAX(cycle_time) as cycle_time,
     SUM(t_run) as total_run_sec,
     SUM(t_plan) as total_plan_sec,
     SUM(q_total) as total_products,

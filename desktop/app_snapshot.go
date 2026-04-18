@@ -11,7 +11,7 @@ package main
 //       聚合 sys_device_status / sys_data_history / pro_machine_sessions / sys_staff_history
 //       → INSERT pro_shift_snapshots
 //
-//   前端查询 → GetShiftSnapshots（按日期/设备/班组筛选）
+//   前端查询 → GetShiftSnapshots（按日期/时间安排/设备/班组/人员筛选）
 //   手动重建 → RegenerateShiftSnapshot（删旧记录后重新聚合）
 // ========================================================
 
@@ -89,13 +89,14 @@ func checkAndGenerateSnapshots(app *App) {
 
 	now := time.Now()
 
-	// 获取全局 CT 兜底值
-	globalCT, _ := app.GetProductionCoefficient()
-	if globalCT <= 0 {
-		globalCT = 100
-	}
+	// CN: 全局 CT 只作为设备未配置独立 cycle_time 时的兜底值。
+	// EN: Global CT is only the fallback when a device has no cycle_time override.
+	// JP: グローバル CT は設備別 cycle_time が未設定の場合のみフォールバックとして使う。
+	globalCT := app.getGlobalCycleTimeFallback()
 
-	// 获取所有设备（含 schedule_id 和 cycle_time）
+	// CN: 快照按设备读取 schedule_id 和 cycle_time，确保两台设备可使用不同 CT。
+	// EN: Snapshots read schedule_id and cycle_time per device so two devices can use different CT values.
+	// JP: スナップショットは設備ごとに schedule_id と cycle_time を読み、2台設備で異なる CT を使えるようにする。
 	var allDevices []models.SysDevice
 	database.DB.Find(&allDevices)
 	schedDevMap := map[int][]models.SysDevice{}
@@ -105,9 +106,11 @@ func checkAndGenerateSnapshots(app *App) {
 		}
 	}
 
-	// 需要检查的逻辑日期：今天 + 昨天（追补跨零点遗漏）
+	// CN: 需要检查的逻辑日期：前天、昨天、今天（3天，确保跨零点班次不漏检）。
+	// EN: Logical days to check: day-2, day-1, today (3 days catches cross-midnight shifts).
+	// JP: チェックする論理日：一昨日・昨日・今日（3日間で深夜またぎシフトの漏れを防ぐ）。
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	dates := []time.Time{today.AddDate(0, 0, -1), today}
+	dates := []time.Time{today.AddDate(0, 0, -2), today.AddDate(0, 0, -1), today}
 
 	for _, sched := range schedules {
 		if !sched.IsActive {
@@ -118,16 +121,53 @@ func checkAndGenerateSnapshots(app *App) {
 			continue
 		}
 
+		// CN: 求逻辑日临界时刻——找 sort_order 最小的活跃班次，其开始时间（分钟）即为临界。
+		//   开始时间早于临界的班次（如三班 0:00 < 一班 8:00）实际运行于日历次日，
+		//   但属于本逻辑日；生成快照时 snapshot_date 应用逻辑日，shift_start/end 用日历次日。
+		// EN: Logical day boundary = start time (minutes) of active shift with min sort_order.
+		//   Shifts starting before this boundary (e.g. 三班 0:00 < 一班 8:00) run on the NEXT
+		//   calendar day but belong to THIS logical day. snapshot_date uses the logical day date.
+		// JP: 論理日境界 = sort_order 最小の活動シフトの開始時刻（分）。境界より前に始まるシフト
+		//   （三班 0:00 < 一班 8:00）は翌カレンダー日に動くが、この論理日に属する。
+		logicalBoundaryMin := -1
+		minSortOrder := -1
+		for _, s := range sched.Shifts {
+			if !s.IsActive {
+				continue
+			}
+			if minSortOrder < 0 || s.SortOrder < minSortOrder {
+				minSortOrder = s.SortOrder
+				logicalBoundaryMin = s.StartHour*60 + s.StartMin
+			}
+		}
+		if logicalBoundaryMin < 0 {
+			continue // 无活跃班次
+		}
+
 		for _, shift := range sched.Shifts {
 			if !shift.IsActive {
 				continue
 			}
-			for _, baseDate := range dates {
-				shiftStart, shiftEnd := resolveShiftDatetime(shift, baseDate)
+
+			// CN: 若班次开始时刻（分钟）早于逻辑日临界，则该班次在日历次日运行（offset=1）。
+			//   例：三班 start=0:00(0) < 临界 8:00(480) → calendarDayOffset=1。
+			// EN: If shift start < logical boundary, shift runs on logical_day+1 (offset=1).
+			// JP: シフト開始が論理日境界より前なら、論理日の翌カレンダー日に動く（offset=1）。
+			shiftStartMin := shift.StartHour*60 + shift.StartMin
+			calendarDayOffset := 0
+			if shiftStartMin < logicalBoundaryMin {
+				calendarDayOffset = 1
+			}
+
+			for _, logicalDate := range dates {
+				// 实际时间戳基于 calendarBase；snapshot_date 始终用逻辑日
+				// Timestamps from calendarBase; snapshot_date always uses logical day.
+				calendarBase := logicalDate.AddDate(0, 0, calendarDayOffset)
+				shiftStart, shiftEnd := resolveShiftDatetime(shift, calendarBase)
 				if shiftEnd.After(now) {
 					continue // 班次尚未结束
 				}
-				dateStr := baseDate.Format("2006-01-02")
+				dateStr := logicalDate.Format("2006-01-02")
 
 				for _, dev := range devices {
 					if snapshotExists(dateStr, dev.ID, shift.ID) {
@@ -473,9 +513,13 @@ func generateOneSnapshot(dev models.SysDevice, shift ShiftConfig, schedID int, d
 // mergeAndSumIntIntervals 合并重叠整数区间并返回累加长度（单位与输入一致，通常为分钟）。
 //
 // CN: 用于休息段配置去重：将多个 [startMin, endMin) 区间排序后合并，再求总分钟数。
-//     避免重叠休息段被重复计入 plan_work_sec 导致理论工作时间偏小。
+//
+//	避免重叠休息段被重复计入 plan_work_sec 导致理论工作时间偏小。
+//
 // EN: Merge overlapping [start, end) int intervals and return total length.
-//     Used to deduplicate overlapping break segments when computing plan_work_sec.
+//
+//	Used to deduplicate overlapping break segments when computing plan_work_sec.
+//
 // JP: 重複する [start, end) 整数区間をマージし合計長を返す。休憩設定の重複除去に使用する。
 func mergeAndSumIntIntervals(ivs [][2]int) int {
 	if len(ivs) == 0 {
@@ -563,24 +607,26 @@ func computeOEE(s *models.ProShiftSnapshot) {
 
 // ─── Wails 查询接口 ──────────────────────────────────────
 
-// GetShiftSnapshots 按日期范围+可选设备/班组筛选班次生产快照
-// Query shift production snapshots by date range with optional device/team filter.
-// 日付範囲・設備・班組でシフト生産スナップショットを検索する。
+// GetShiftSnapshots 按日期范围+可选时间安排/设备/班组/人员筛选班次生产快照
+// Query shift production snapshots by date range with optional schedule/device/team/staff filters.
+// 日付範囲・スケジュール・設備・班組・人員でシフト生産スナップショットを検索する。
 // GetShiftSnapshots 查询班次生产快照列表
 //
 // CN: startDate/endDate 支持两种格式：
 //   - "YYYY-MM-DD"（纯日期）→ 用 snapshot_date 过滤
 //   - "YYYY-MM-DDTHH:MM"（含时刻，前端 datetime-local 格式）→ 用 shift_start/shift_end 做分钟级过滤
-//     staffName 为空时不过滤人员；非空时使用 LIKE '%name%' 在 staff_snapshot 字段中模糊匹配。
+//     scheduleID/deviceID/teamID 为 nil 或 <=0 时不过滤；staffName 非空时在 staff_snapshot 中模糊匹配。
 //
 // EN: startDate/endDate accept "YYYY-MM-DD" (date-only → filter by snapshot_date) or
 //
 //	"YYYY-MM-DDTHH:MM" (datetime → filter by shift_start/shift_end for minute-level precision).
+//	Nil/non-positive scheduleID/deviceID/teamID means no filter; non-empty staffName uses LIKE on staff_snapshot.
 //
 // JP: startDate/endDate は "YYYY-MM-DD"（日付のみ→snapshot_dateでフィルタ）または
 //
 //	"YYYY-MM-DDTHH:MM"（日時→shift_start/shift_end で分単位フィルタ）を受け付ける。
-func (a *App) GetShiftSnapshots(startDate, endDate string, deviceID *int, teamID *int, staffName string) ([]models.ProShiftSnapshot, error) {
+//	scheduleID/deviceID/teamID が nil または 0 以下なら未指定扱い。staffName は staff_snapshot を LIKE 検索する。
+func (a *App) GetShiftSnapshots(startDate, endDate string, scheduleID *int, deviceID *int, teamID *int, staffName string) ([]models.ProShiftSnapshot, error) {
 	if database.DB == nil {
 		return nil, fmt.Errorf("数据库未连接")
 	}
@@ -604,6 +650,9 @@ func (a *App) GetShiftSnapshots(startDate, endDate string, deviceID *int, teamID
 		} else {
 			query = query.Where("snapshot_date <= ?", endDate)
 		}
+	}
+	if scheduleID != nil && *scheduleID > 0 {
+		query = query.Where("schedule_id = ?", *scheduleID)
 	}
 	if deviceID != nil && *deviceID > 0 {
 		query = query.Where("device_id = ?", *deviceID)
@@ -653,10 +702,7 @@ func (a *App) RegenerateShiftSnapshot(dateStr string, shiftID, deviceID int) err
 	}
 	shiftStart, shiftEnd := resolveShiftDatetime(sc, baseDate)
 
-	globalCT, _ := a.GetProductionCoefficient()
-	if globalCT <= 0 {
-		globalCT = 100
-	}
+	globalCT := a.getGlobalCycleTimeFallback()
 	ct := globalCT
 	if dev.CycleTime != nil && *dev.CycleTime > 0 {
 		ct = *dev.CycleTime
@@ -678,12 +724,17 @@ type BatchRegenerateResult struct {
 
 // BatchRegenerateShiftSnapshots 批量重新生成指定日期×班次×设备的快照。
 // CN: 逐条调用单条重建逻辑（先删旧再聚合），单项失败不中断整批，返回每项结果清单。
-//     dates 为日期列表（"YYYY-MM-DD"）；shiftIDs / deviceIDs 为过滤限定列表，空表示不过滤（即全部）。
-//     典型用法：修复某几天快照时，传 dates=["2026-04-12","2026-04-13"]，shiftIDs/deviceIDs 传空。
+//
+//	dates 为日期列表（"YYYY-MM-DD"）；shiftIDs / deviceIDs 为过滤限定列表，空表示不过滤（即全部）。
+//	典型用法：修复某几天快照时，传 dates=["2026-04-12","2026-04-13"]，shiftIDs/deviceIDs 传空。
+//
 // EN: Calls single-item regeneration for each combination; failures are logged per-item without aborting the batch.
-//     Empty shiftIDs / deviceIDs means "all shifts / all devices" for the given dates.
+//
+//	Empty shiftIDs / deviceIDs means "all shifts / all devices" for the given dates.
+//
 // JP: 各組合せに対して単件再生成を呼び出し、失敗があっても他の件は継続する。
-//     shiftIDs / deviceIDs が空の場合は該当日付の全班次・全設備を対象とする。
+//
+//	shiftIDs / deviceIDs が空の場合は該当日付の全班次・全設備を対象とする。
 func (a *App) BatchRegenerateShiftSnapshots(dates []string, shiftIDs []int, deviceIDs []int) ([]BatchRegenerateResult, error) {
 	if database.DB == nil {
 		return nil, fmt.Errorf("数据库未连接")
@@ -713,10 +764,7 @@ func (a *App) BatchRegenerateShiftSnapshots(dates []string, shiftIDs []int, devi
 		deviceFilter[id] = true
 	}
 
-	globalCT, _ := a.GetProductionCoefficient()
-	if globalCT <= 0 {
-		globalCT = 100
-	}
+	globalCT := a.getGlobalCycleTimeFallback()
 
 	var results []BatchRegenerateResult
 

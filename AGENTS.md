@@ -32,6 +32,10 @@
 - **EN**: The system follows a memory-first, channel-decoupled design. MQTT ingress, logic evaluation, alarms, history storage, task triggering, and event execution are layered asynchronous stages. Do not push slow I/O back into MQTT callbacks or the hot path.
 - **JP**: 本システムは memory-first と Channel 分離設計を採用しています。MQTT 受信、ロジック評価、アラーム、履歴保存、タスク起動、イベント実行は非同期レイヤで分離されています。低速 I/O を MQTT コールバックや中核ホットパスへ戻してはいけません。
 
+- **CN**: 产量累计计数器的可疑回落必须优先在采集层防抖处理。`suspicious_value` 为空默认关闭防抖；启动首帧可疑值必须先用历史最近非零值判定，不能直接作为启动快照写入历史表。详细说明见 `docs/采集层防抖与启动快照说明.md`。
+- **EN**: Suspicious drops from cumulative production counters must be handled first at the acquisition-debounce layer. An empty `suspicious_value` disables debounce by default; a suspicious startup first frame must be checked against the latest historical non-zero value before it can be stored as a startup snapshot. See `docs/采集层防抖与启动快照说明.md`.
+- **JP**: 産量累積カウンタの疑わしい低下は、まず収集層デバウンスで処理すること。`suspicious_value` が空ならデバウンスは既定で無効。起動初回の疑わしい値は、履歴の最新非ゼロ値で判定してからでなければ起動スナップショットとして履歴保存してはいけません。詳細は `docs/采集层防抖与启动快照说明.md` を参照。
+
 - **CN**: `docs/项目架构总览.md` 中描述的双循环快照、Worker 池、TaskScheduler、EventProcessor、GatewayManager 是当前实现思路。除非明确重构，不要破坏这些边界。
 - **EN**: The dual-pass snapshot model, worker pools, TaskScheduler, EventProcessor, and GatewayManager described in `docs/项目架构总览.md` reflect the current implementation intent. Do not break these boundaries unless a refactor is explicitly required.
 - **JP**: `docs/项目架构总览.md` に記載された二段スナップショット、Worker プール、TaskScheduler、EventProcessor、GatewayManager は現行設計意図です。明示的なリファクタでない限り、この境界を壊してはいけません。

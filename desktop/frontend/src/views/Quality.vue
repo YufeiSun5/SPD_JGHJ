@@ -19,7 +19,7 @@
         </button>
         <button 
           class="action-btn refresh" 
-          @click="loadOrders" 
+          @click="refreshOrdersData"
           title="刷新数据"
         >
           <i class="fas fa-sync-alt"></i> 刷新
@@ -76,14 +76,6 @@
         </h3>
         <div style="display:flex;gap:8px;align-items:center">
           <button 
-            class="action-btn-mini secondary" 
-            @click="showSettings = !showSettings"
-            title="显示/隐藏高级设置"
-          >
-            <i :class="showSettings ? 'fas fa-eye-slash' : 'fas fa-cog'"></i>
-            {{ showSettings ? '隐藏设置' : '高级设置' }}
-          </button>
-          <button 
             class="action-btn success"
             @click="exportData" 
             :disabled="orders.length === 0"
@@ -136,34 +128,6 @@
           <button class="action-btn secondary" @click="resetFilters">
             <i class="fas fa-undo"></i> 重置
           </button>
-        </div>
-        
-        <!-- 高级设置（默认隐藏） -->
-        <div v-if="showSettings" class="advanced-settings">
-          <div class="settings-divider"></div>
-          <div class="setting-row">
-            <div class="setting-label">
-              <i class="fas fa-clock"></i>
-              <span>理论节拍（单件加工时间）</span>
-            </div>
-            <div class="setting-input">
-              <input 
-                v-model.number="productionCoefficient" 
-                type="number" 
-                min="0" 
-                step="0.1"
-                placeholder="例如：10"
-              />
-              <span class="unit">秒/件</span>
-            </div>
-            <button class="action-btn-mini secondary" @click="saveCoefficient">
-              <i class="fas fa-save"></i> 保存
-            </button>
-          </div>
-          <div class="setting-hint">
-            <i class="fas fa-info-circle"></i>
-            <span>性能稼动率 = 理论时间 / 实际时间 × 100%，理论时间 = 节拍 × 良品数</span>
-          </div>
         </div>
 
       <div class="table-container">
@@ -313,9 +277,8 @@ import PlanModal from '../components/PlanModal.vue'
 const orders = ref([])
 const allOrders = ref([]) // 存储所有工单（未筛选）
 const devices = ref([])
-const productionCoefficient = ref(10) // 默认10秒/件
+const defaultCycleTime = ref(100) // 设备未配置独立 CT 时使用系统默认值
 const loading = ref(false)
-const showSettings = ref(false) // 控制高级设置显示/隐藏
 
 // 筛选条件
 const filters = ref({
@@ -410,7 +373,7 @@ const calculateEfficiency = (order) => {
   
   if (actualSeconds <= 0) return 0
   
-  const theoreticalSeconds = order.actual_qty * productionCoefficient.value // 理论时间（秒）= 总产量 × 节拍
+  const theoreticalSeconds = order.actual_qty * getOrderCycleTime(order) // 理论时间（秒）= 总产量 × 设备生效 CT
   const efficiency = (theoreticalSeconds / actualSeconds) * 100
   
   return Math.round(efficiency)
@@ -516,6 +479,17 @@ const getDeviceName = (deviceId) => {
   const device = devices.value.find(d => d.id === deviceId)
   return device ? device.device_name : `设备${deviceId}`
 }
+
+// CN: 工单性能稼动率按目标设备读取独立 CT，设备未配置时回退到系统默认 CT。
+// EN: Order performance uses the target device CT and falls back to the system default CT.
+// JP: 工単の性能稼動率は対象設備の CT を使い、未設定ならシステム既定 CT に戻す。
+const getDeviceCycleTime = (deviceId) => {
+  const device = devices.value.find(d => d.id === deviceId)
+  const ct = Number(device?.cycle_time || 0)
+  return ct > 0 ? ct : (defaultCycleTime.value || 100)
+}
+
+const getOrderCycleTime = (order) => getDeviceCycleTime(order.target_device_id)
 
 // 获取状态文本
 const getStatusText = (status) => {
@@ -623,33 +597,6 @@ const showToast = (message, type = 'success', duration = 2000) => {
   toast.value.show = true
 }
 
-// 保存系数设置
-const saveCoefficient = async () => {
-  if (productionCoefficient.value <= 0) {
-    showToast('系数必须大于0', 'warning')
-    return
-  }
-  
-  try {
-    // 保存到后端配置文件
-    if (window.go && window.go.main && window.go.main.App) {
-      await window.go.main.App.SetProductionCoefficient(productionCoefficient.value)
-    }
-    
-    // 重新计算所有工单的效率
-    allOrders.value = allOrders.value.map(order => ({
-      ...order,
-      efficiency: calculateEfficiency(order)
-    }))
-    
-    applyFilters() // 重新应用筛选
-    showToast('系数设置已保存', 'success')
-  } catch (e) {
-    console.error('保存系数失败:', e)
-    showToast('保存失败: ' + e, 'error')
-  }
-}
-
 // 查看工单详情
 const viewOrder = (order) => {
   // 计算实际用时
@@ -659,10 +606,11 @@ const viewOrder = (order) => {
     actualSeconds += Math.floor((Date.now() - currentStart.getTime()) / 1000)
   }
   const actualTime = formatSecondsToMinutes(actualSeconds)
+  const ct = getOrderCycleTime(order)
   
   // 计算理论时间（总产量 × 节拍）
   const theoreticalTime = order.actual_qty > 0 
-    ? (order.actual_qty * productionCoefficient.value / 60).toFixed(2) 
+    ? (order.actual_qty * ct / 60).toFixed(2)
     : '-'
   
   confirmDialog.value = {
@@ -679,6 +627,7 @@ const viewOrder = (order) => {
       { icon: '✅', label: '良品数', value: order.ok_qty },
       { icon: '❌', label: '不良品数', value: order.ng_qty },
       { icon: '📈', label: '良品率', value: `${order.quality_rate}%` },
+      { icon: '⏱️', label: '生效CT', value: `${ct} 秒/件` },
       { icon: '⏱️', label: '实际用时', value: `${actualTime} 分钟` },
       { icon: '⏰', label: '理论时间', value: `${theoreticalTime} 分钟` },
       { icon: '🚀', label: '性能稼动率', value: `${order.efficiency}%` },
@@ -807,7 +756,7 @@ const exportData = () => {
     // 表头
     const headers = [
       '序号', '工单号', '产品编码', '设备', '计划数', '实际数', '良品数', '不良数',
-      '良品率(%)', '性能稼动率(%)', '状态', '实际用时(分钟)', '开工时间', '完工时间', '理论时间(分钟)'
+      '良品率(%)', '性能稼动率(%)', '状态', '实际用时(分钟)', '开工时间', '完工时间', '生效CT(秒/件)', '理论时间(分钟)'
     ]
     csv += headers.join(',') + '\n'
     
@@ -820,9 +769,10 @@ const exportData = () => {
         actualSeconds += Math.floor((Date.now() - currentStart.getTime()) / 1000)
       }
       const actualTime = formatSecondsToMinutes(actualSeconds)
+      const ct = getOrderCycleTime(order)
       
       const theoreticalTime = order.actual_qty > 0 
-        ? (order.actual_qty * productionCoefficient.value / 60).toFixed(2) 
+        ? (order.actual_qty * ct / 60).toFixed(2)
         : '-'
       
       const values = [
@@ -840,6 +790,7 @@ const exportData = () => {
         actualTime,
         formatDateTime(order.start_time),
         formatDateTime(order.end_time),
+        ct,
         theoreticalTime
       ]
       csv += values.join(',') + '\n'
@@ -860,27 +811,26 @@ const exportData = () => {
   }
 }
 
-// 加载理论节拍系数
-const loadProductionCoefficient = async () => {
+const loadSystemConfig = async () => {
   try {
-    if (window.go && window.go.main && window.go.main.App) {
-      const coefficient = await window.go.main.App.GetProductionCoefficient()
-      productionCoefficient.value = coefficient
-      console.log('加载理论节拍系数:', coefficient)
+    if (window.go?.main?.App?.GetSystemConfig) {
+      const config = await window.go.main.App.GetSystemConfig()
+      defaultCycleTime.value = config?.production_coefficient > 0 ? config.production_coefficient : 100
     }
   } catch (e) {
-    console.error('加载系数失败:', e)
-    // 使用默认值
-    productionCoefficient.value = 10.0
+    console.error('加载系统默认CT失败:', e)
+    defaultCycleTime.value = 100
   }
 }
 
-onMounted(async () => {
-  // 加载理论节拍系数
-  await loadProductionCoefficient()
-  
+const refreshOrdersData = async () => {
+  await loadSystemConfig()
   await loadDevices()
   await loadOrders()
+}
+
+onMounted(async () => {
+  await refreshOrdersData()
 })
 </script>
 

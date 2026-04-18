@@ -34,6 +34,7 @@
 package models
 
 import (
+	"math"
 	"sync"
 	"time"
 )
@@ -65,22 +66,39 @@ type Tag struct {
 	StoreCycle    int     `json:"store_cycle"`    // 定时周期(秒)
 	StoreDeadband float64 `json:"store_deadband"` // 存储死区
 
+	// 采集防抖/启动快照配置 (只读)
+	SuspiciousValue       *float64 `json:"suspicious_value"`        // NULL=关闭采集防抖
+	DebounceThreshold     float64  `json:"debounce_threshold"`      // LastValidValue 大于该值才拦截可疑值
+	StartupSnapshotEnable *int     `json:"startup_snapshot_enable"` // NULL=兼容旧行为, 1=开启, 0=关闭
+
 	// 运行时状态 (需加锁修改)
-	mu              sync.RWMutex
-	CurrentValue    float64   `json:"current_value"`
-	LastValue       float64   `json:"last_value"`
-	CurrentStrValue string    `json:"current_str_value"` // 字符串类型的值
-	LastStrValue    string    `json:"last_str_value"`    // 上次字符串值
-	LastUpdateTime  time.Time `json:"last_update_time"`
-	LastStoreTime   time.Time `json:"last_store_time"`
-	IsFirstUpdate   bool      `json:"is_first_update"` // 是否首次更新 (用于过滤冷启动)
-	Quality         int       `json:"quality"`         // 数据质量/连接状态: 1=在线(192), 0=离线(非192)
-	LastQuality     int       `json:"last_quality"`    // 上次质量码/连接状态 (用于检测在线/离线变化)
+	mu                     sync.RWMutex
+	CurrentValue           float64   `json:"current_value"`
+	LastValue              float64   `json:"last_value"`
+	CurrentStrValue        string    `json:"current_str_value"` // 字符串类型的值
+	LastStrValue           string    `json:"last_str_value"`    // 上次字符串值
+	LastUpdateTime         time.Time `json:"last_update_time"`
+	LastStoreTime          time.Time `json:"last_store_time"`
+	IsFirstUpdate          bool      `json:"is_first_update"`           // 是否首次更新 (用于过滤冷启动)
+	Quality                int       `json:"quality"`                   // 数据质量/连接状态: 1=在线(192), 0=离线(非192)
+	LastQuality            int       `json:"last_quality"`              // 上次质量码/连接状态 (用于检测在线/离线变化)
+	DebouncePending        bool      `json:"debounce_pending"`          // 是否存在等待判定的可疑值
+	DebounceValue          float64   `json:"debounce_value"`            // 等待判定的可疑值
+	DebounceTime           time.Time `json:"debounce_time"`             // 可疑值首次进入观察窗的时间
+	DebounceQuality        int       `json:"debounce_quality"`          // 可疑值对应的数据质量
+	DebounceLastValidValue *float64  `json:"debounce_last_valid_value"` // 启动前历史最近非零值，用于首帧可疑值判定
 
 	// 报警状态
 	AlarmState     string    `json:"alarm_state"`      // "", "HH", "H", "L", "LL"
 	AlarmStartTime time.Time `json:"alarm_start_time"` // 报警开始时间
 	AlarmRecordID  int64     `json:"alarm_record_id"`  // 当前报警记录ID
+}
+
+// ValueChange 描述一次被采集层确认后的数值变化。
+type ValueChange struct {
+	OldValue  float64
+	NewValue  float64
+	Timestamp time.Time
 }
 
 // GetValue 线程安全获取当前值
@@ -128,6 +146,193 @@ func (t *Tag) UpdateValue(newValue float64, updateTime time.Time, quality int) b
 
 	t.LastUpdateTime = updateTime
 	return changed
+}
+
+// ApplyNumericSample 在线程安全边界内处理数值采样，并返回需要进入业务分发的真实变化。
+// CN: 可疑值观察窗必须在更新 CurrentValue 前执行，假 0 不能污染内存、任务触发和历史入库。
+// EN: The suspicious-value window runs before CurrentValue changes, so a false zero cannot pollute memory, tasks, or history.
+// JP: 疑わしい値の観察窓は CurrentValue 更新前に実行し、偽の 0 がメモリ・タスク・履歴を汚さないようにする。
+func (t *Tag) ApplyNumericSample(newValue float64, updateTime time.Time, quality int) []ValueChange {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	suspiciousConfigured := t.SuspiciousValue != nil
+	isSuspicious := suspiciousConfigured && floatsEqual(newValue, *t.SuspiciousValue)
+
+	if t.IsFirstUpdate {
+		if suspiciousConfigured && t.DebouncePending && !isSuspicious {
+			referenceValue, hasReference := t.startupDebounceReferenceLocked()
+			if hasReference {
+				return t.resolveStartupDebounceLocked(newValue, updateTime, quality, referenceValue)
+			}
+			t.clearDebounceLocked()
+		}
+
+		if isSuspicious {
+			referenceValue, hasReference := t.startupDebounceReferenceLocked()
+			if hasReference && referenceValue > t.DebounceThreshold {
+				// CN: 启动首帧可疑值必须先观察，不能被 InitOnly 当快照写入历史表。
+				// EN: A suspicious first frame must be observed first; InitOnly must not store it as a startup snapshot.
+				// JP: 起動初回の疑わしい値は先に観察し、InitOnly で履歴に保存しない。
+				t.DebouncePending = true
+				t.DebounceValue = newValue
+				t.DebounceTime = updateTime
+				t.DebounceQuality = quality
+				t.LastQuality = t.Quality
+				t.Quality = quality
+				return nil
+			}
+		}
+
+		t.CurrentValue = newValue
+		t.LastValue = newValue
+		t.LastUpdateTime = updateTime
+		t.Quality = quality
+		t.LastQuality = quality
+		t.IsFirstUpdate = false
+		t.clearDebounceLocked()
+		return nil
+	}
+
+	if t.SuspiciousValue == nil {
+		return t.applyNumericValueLocked(newValue, updateTime, quality)
+	}
+
+	lastValid := t.CurrentValue
+
+	if isSuspicious {
+		if lastValid > t.DebounceThreshold {
+			// CN: 大计数值后的可疑值先观察，不落库；连续可疑值只保留一笔，避免日志放大。
+			// EN: After a large counter value, hold the suspicious value in memory only; repeated suspicious samples stay collapsed.
+			// JP: 大きなカウンタ値後の疑わしい値はメモリ観察のみとし、連続値は1件に畳み込む。
+			if !t.DebouncePending {
+				t.DebounceTime = updateTime
+			}
+			t.DebouncePending = true
+			t.DebounceValue = newValue
+			t.DebounceQuality = quality
+			t.LastQuality = t.Quality
+			t.Quality = quality
+			t.LastUpdateTime = updateTime
+			return nil
+		}
+
+		t.clearDebounceLocked()
+		return t.applyNumericValueLocked(newValue, updateTime, quality)
+	}
+
+	if t.DebouncePending {
+		pendingValue := t.DebounceValue
+		pendingTime := t.DebounceTime
+		pendingQuality := t.DebounceQuality
+		t.clearDebounceLocked()
+
+		if newValue >= lastValid {
+			// CN: 恢复值不低于 LastValidValue，说明中间可疑值是假回落，直接丢弃。
+			// EN: If the recovered value is not below LastValidValue, the suspicious value was a false drop and is discarded.
+			// JP: 復帰値が LastValidValue 以上なら、中間の疑わしい値は偽低下として破棄する。
+			return t.applyNumericValueLocked(newValue, updateTime, quality)
+		}
+
+		// CN: 恢复值低于 LastValidValue，认定为真实复位；先补发基准值，再处理新值。
+		// EN: If the recovered value is lower, treat it as a real reset; emit the baseline value first, then the new value.
+		// JP: 復帰値が低い場合は実リセットとみなし、基準値を先に出してから新値を処理する。
+		changes := t.applyNumericValueLocked(pendingValue, pendingTime, pendingQuality)
+		changes = append(changes, t.applyNumericValueLocked(newValue, updateTime, quality)...)
+		return changes
+	}
+
+	return t.applyNumericValueLocked(newValue, updateTime, quality)
+}
+
+func (t *Tag) startupDebounceReferenceLocked() (float64, bool) {
+	if t.DebounceLastValidValue == nil {
+		return 0, false
+	}
+	return *t.DebounceLastValidValue, true
+}
+
+func (t *Tag) resolveStartupDebounceLocked(newValue float64, updateTime time.Time, quality int, referenceValue float64) []ValueChange {
+	pendingValue := t.DebounceValue
+	pendingTime := t.DebounceTime
+	pendingQuality := t.DebounceQuality
+	t.clearDebounceLocked()
+
+	if newValue >= referenceValue {
+		t.CurrentValue = newValue
+		t.LastValue = newValue
+		t.LastUpdateTime = updateTime
+		t.Quality = quality
+		t.LastQuality = quality
+		t.IsFirstUpdate = false
+		return nil
+	}
+
+	t.CurrentValue = referenceValue
+	t.LastValue = referenceValue
+	t.Quality = pendingQuality
+	t.LastQuality = pendingQuality
+	t.IsFirstUpdate = false
+
+	changes := t.applyNumericValueLocked(pendingValue, pendingTime, pendingQuality)
+	changes = append(changes, t.applyNumericValueLocked(newValue, updateTime, quality)...)
+	return changes
+}
+
+func (t *Tag) applyNumericValueLocked(newValue float64, updateTime time.Time, quality int) []ValueChange {
+	changed := false
+	oldValue := t.CurrentValue
+	if t.CurrentValue != newValue {
+		t.LastValue = t.CurrentValue
+		t.CurrentValue = newValue
+		changed = true
+	}
+
+	t.LastQuality = t.Quality
+	t.Quality = quality
+	t.LastUpdateTime = updateTime
+
+	if !changed {
+		return nil
+	}
+
+	return []ValueChange{{
+		OldValue:  oldValue,
+		NewValue:  newValue,
+		Timestamp: updateTime,
+	}}
+}
+
+func (t *Tag) clearDebounceLocked() {
+	t.DebouncePending = false
+	t.DebounceValue = 0
+	t.DebounceTime = time.Time{}
+	t.DebounceQuality = 0
+}
+
+func floatsEqual(a, b float64) bool {
+	return math.Abs(a-b) < 0.000000001
+}
+
+// HasPendingDebounce 判断是否有采集层可疑值仍在观察窗内。
+func (t *Tag) HasPendingDebounce() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.DebouncePending
+}
+
+// ShouldStartupSnapshot 判断冷启动首帧是否只入库不触发业务。
+// CN: NULL 保持旧表行为；显式 0 可关闭首帧穿透，避免启动时写入不需要的快照。
+// EN: NULL preserves legacy-table behavior; explicit 0 disables first-frame storage when a point should not punch through.
+// JP: NULL は旧テーブル動作を維持し、明示的な 0 は不要な初回フレーム保存を止める。
+func (t *Tag) ShouldStartupSnapshot() bool {
+	if t.StoreMode != 1 && t.StoreMode != 3 {
+		return false
+	}
+	if t.StartupSnapshotEnable == nil {
+		return true
+	}
+	return *t.StartupSnapshotEnable == 1
 }
 
 // UpdateStringValue 线程安全更新字符串值 - 返回是否变动

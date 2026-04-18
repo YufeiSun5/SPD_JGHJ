@@ -226,8 +226,8 @@ export function GetHistoryData(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['GetHistoryData'](arg1, arg2, arg3, arg4, arg5);
 }
 
-export function GetHourlyOEE(arg1) {
-  return window['go']['main']['App']['GetHourlyOEE'](arg1);
+export function GetHourlyOEE() {
+  return window['go']['main']['App']['GetHourlyOEE']();
 }
 
 export function GetHourlyProduction(arg1) {
@@ -254,14 +254,6 @@ export function GetMonthlyQualityByOrder() {
   return window['go']['main']['App']['GetMonthlyQualityByOrder']();
 }
 
-export function GetProductionCoefficient() {
-  return window['go']['main']['App']['GetProductionCoefficient']();
-}
-
-export function GetProductionCoefficientFromEnv() {
-  return window['go']['main']['App']['GetProductionCoefficientFromEnv']();
-}
-
 export function GetRealHourlyProduction() {
   return window['go']['main']['App']['GetRealHourlyProduction']();
 }
@@ -286,8 +278,8 @@ export function GetShiftSchedules() {
   return window['go']['main']['App']['GetShiftSchedules']();
 }
 
-export function GetShiftSnapshots(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['main']['App']['GetShiftSnapshots'](arg1, arg2, arg3, arg4, arg5);
+export function GetShiftSnapshots(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['GetShiftSnapshots'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function GetShifts() {
@@ -372,10 +364,6 @@ export function SetDeviceCycleTime(arg1, arg2) {
 
 export function SetDeviceSchedule(arg1, arg2) {
   return window['go']['main']['App']['SetDeviceSchedule'](arg1, arg2);
-}
-
-export function SetProductionCoefficient(arg1) {
-  return window['go']['main']['App']['SetProductionCoefficient'](arg1);
 }
 
 export function SetSystemConfig(arg1) {

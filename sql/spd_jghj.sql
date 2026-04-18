@@ -172,8 +172,14 @@ CREATE TABLE `sys_devices`  (
   `device_code` varchar(50) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL COMMENT '设备编码 (英文唯一)',
   `device_name` varchar(100) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL COMMENT '设备显示名称',
   `identify_key` varchar(50) CHARACTER SET utf8 COLLATE utf8_general_ci NULL DEFAULT NULL COMMENT 'JSON根键名 (可选)',
+  -- CN: 设备级时间安排和 CT 配置；OEE 优先使用 cycle_time，NULL 时回退系统默认 CT。
+  -- EN: Device schedule and CT config; OEE prefers cycle_time and falls back to the system default CT when NULL.
+  -- JP: 設備別スケジュールと CT 設定。OEE は cycle_time を優先し、NULL の場合はシステム既定 CT を使う。
+  `schedule_id` int NULL DEFAULT NULL COMMENT '关联时间安排组ID（多对一，NULL=未分配）',
+  `cycle_time` double NULL DEFAULT NULL COMMENT '理论节拍（秒/件），NULL=使用全局默认',
   PRIMARY KEY (`id`) USING BTREE,
-  INDEX `idx_gw`(`gateway_id` ASC) USING BTREE
+  INDEX `idx_gw`(`gateway_id` ASC) USING BTREE,
+  INDEX `idx_device_schedule`(`schedule_id` ASC) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8 COLLATE = utf8_general_ci COMMENT = '逻辑设备表' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
@@ -322,6 +328,9 @@ CREATE TABLE `sys_variables`  (
   `store_mode` tinyint NULL DEFAULT 1 COMMENT '存储模式: 0-不存, 1-变化, 2-定时, 3-混合',
   `store_cycle` int NULL DEFAULT 60 COMMENT '定时存储周期(秒)',
   `store_deadband` float NULL DEFAULT 0 COMMENT '存储死区(变化量超过此值才存)',
+  `suspicious_value` double NULL DEFAULT NULL COMMENT '可疑抖动值，NULL=关闭采集防抖',
+  `debounce_threshold` double NULL DEFAULT 5 COMMENT '采集防抖起滤阈值，LastValidValue 大于该值才拦截可疑值',
+  `startup_snapshot_enable` tinyint NULL DEFAULT NULL COMMENT '启动首帧快照开关，NULL=兼容旧行为，1=开启，0=关闭',
   `source_type` tinyint NULL DEFAULT 0 COMMENT '来源: 0-MQTT, 1-计算',
   `calc_rule` varchar(255) CHARACTER SET utf8 COLLATE utf8_general_ci NULL DEFAULT NULL COMMENT '计算公式 (Go表达式)',
   PRIMARY KEY (`id`) USING BTREE,

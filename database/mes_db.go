@@ -379,6 +379,29 @@ func GetAllOrders(status *int8, deviceID *int) ([]*models.ProOrder, error) {
 	return orders, nil
 }
 
+// GetLastNonzeroHistoryValue 返回指定变量在触发时间之前的最近非零历史值。
+// CN: 产量任务用它识别计数器重连恢复，避免把 old=0,new=历史累计值误写成新产量。
+// EN: Production tasks use this to detect counter reconnect recovery before writing order totals.
+// JP: 産量タスクはこれでカウンタ復旧値を検出し、累積値を新規産量として誤記録しない。
+func GetLastNonzeroHistoryValue(varID int64, before time.Time) (int, bool, error) {
+	var row struct {
+		Val float64 `gorm:"column:val"`
+	}
+	err := DB.Table("sys_data_history").
+		Select("val").
+		Where("var_id = ? AND created_at < ? AND val > 0", varID, before).
+		Order("created_at DESC").
+		Limit(1).
+		Scan(&row).Error
+	if err != nil {
+		return 0, false, err
+	}
+	if row.Val <= 0 {
+		return 0, false, nil
+	}
+	return int(row.Val), true, nil
+}
+
 // UpdateOrder 更新工单
 func UpdateOrder(id int64, updates map[string]interface{}) error {
 	// 先检查记录是否存在
@@ -408,6 +431,23 @@ func UpdateOrder(id int64, updates map[string]interface{}) error {
 			currentValue = existingOrder.Status
 		case "target_device_id":
 			currentValue = existingOrder.TargetDeviceID
+			if newDeviceID, ok := newValue.(int); ok {
+				currentID := 0
+				if existingOrder.TargetDeviceID != nil {
+					currentID = *existingOrder.TargetDeviceID
+				}
+				if currentID != newDeviceID {
+					var runCount int64
+					if err := DB.Model(&models.ProProductionRun{}).
+						Where("order_id = ? AND (end_time IS NULL OR run_ok_qty <> 0 OR run_ng_qty <> 0)", id).
+						Count(&runCount).Error; err != nil {
+						return fmt.Errorf("检查工单运行记录失败: %w", err)
+					}
+					if runCount > 0 {
+						return fmt.Errorf("工单已有生产运行记录，禁止修改目标设备")
+					}
+				}
+			}
 		case "start_time":
 			currentValue = existingOrder.StartTime
 		case "end_time":
@@ -430,13 +470,48 @@ func UpdateOrder(id int64, updates map[string]interface{}) error {
 		return nil
 	}
 
-	// 执行更新
-	result := DB.Model(&models.ProOrder{}).Where("id = ?", id).Updates(filteredUpdates)
-	if result.Error != nil {
-		return fmt.Errorf("更新工单失败: %w", result.Error)
+	isCompleting := false
+	if status, ok := filteredUpdates["status"]; ok {
+		switch v := status.(type) {
+		case int8:
+			isCompleting = v == 3
+		case int:
+			isCompleting = v == 3
+		}
 	}
 
-	fmt.Printf("✅ 工单更新成功 - ID: %d, 影响行数: %d, 更新字段: %+v\n", id, result.RowsAffected, filteredUpdates)
+	updateFn := func(tx *gorm.DB) error {
+		result := tx.Model(&models.ProOrder{}).Where("id = ?", id).Updates(filteredUpdates)
+		if result.Error != nil {
+			return fmt.Errorf("更新工单失败: %w", result.Error)
+		}
+
+		if isCompleting {
+			endTime, ok := filteredUpdates["end_time"].(time.Time)
+			if !ok {
+				endTime = time.Now()
+			}
+			// CN: 工单完工必须同时关闭活动运行记录，否则后续产量会继续写入旧工单。
+			// EN: Completing an order must close active runs, or later output can still hit the old order.
+			// JP: 工単完了時は活動中の実行記録も閉じ、以後の産量が旧工単へ入らないようにする。
+			if err := tx.Model(&models.ProProductionRun{}).
+				Where("order_id = ? AND end_time IS NULL", id).
+				Update("end_time", endTime).Error; err != nil {
+				return fmt.Errorf("关闭工单运行记录失败: %w", err)
+			}
+		}
+		fmt.Printf("✅ 工单更新成功 - ID: %d, 影响行数: %d, 更新字段: %+v\n", id, result.RowsAffected, filteredUpdates)
+		return nil
+	}
+
+	if isCompleting {
+		if err := DB.Transaction(updateFn); err != nil {
+			return err
+		}
+	} else if err := updateFn(DB); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -615,9 +690,26 @@ func UpdateProductionRun(runID int64, okQtyDelta, ngQtyDelta int) error {
 		}
 	}()
 
-	// 1. 更新运行记录
+	// 1. 获取运行记录并确认关联工单仍处于生产中。
+	var run models.ProProductionRun
+	if err := tx.First(&run, runID).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("查询运行记录失败: %w", err)
+	}
+
+	var currentOrder models.ProOrder
+	if err := tx.First(&currentOrder, run.OrderID).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("查询工单失败: %w", err)
+	}
+	if run.EndTime != nil || currentOrder.Status != 1 {
+		tx.Rollback()
+		return fmt.Errorf("运行记录未处于生产中，禁止更新产量: run_id=%d, order_id=%d, order_status=%d", run.ID, run.OrderID, currentOrder.Status)
+	}
+
+	// 2. 更新运行记录
 	result := tx.Model(&models.ProProductionRun{}).
-		Where("id = ?", runID).
+		Where("id = ? AND end_time IS NULL", runID).
 		Updates(map[string]interface{}{
 			"run_ok_qty": DB.Raw("run_ok_qty + ?", okQtyDelta),
 			"run_ng_qty": DB.Raw("run_ng_qty + ?", ngQtyDelta),
@@ -632,13 +724,6 @@ func UpdateProductionRun(runID int64, okQtyDelta, ngQtyDelta int) error {
 		return fmt.Errorf("运行记录不存在: id=%d", runID)
 	}
 
-	// 2. 获取运行记录的工单ID
-	var run models.ProProductionRun
-	if err := tx.First(&run, runID).Error; err != nil {
-		tx.Rollback()
-		return fmt.Errorf("查询运行记录失败: %w", err)
-	}
-
 	// 3. 更新工单总数量
 	// 🔥 业务逻辑说明:
 	//   - actual_qty (总产量) = 只在良品增加时增长 (okQtyDelta > 0)
@@ -648,13 +733,6 @@ func UpdateProductionRun(runID int64, okQtyDelta, ngQtyDelta int) error {
 	if okQtyDelta < 0 && ngQtyDelta > 0 {
 		// NG转换场景: ok_qty -1, ng_qty +1, actual_qty 不变
 		actualQtyDelta = 0
-	}
-
-	// 🛡️ 防止良品数量变为负数（设备重启保护）
-	var currentOrder models.ProOrder
-	if err := tx.First(&currentOrder, run.OrderID).Error; err != nil {
-		tx.Rollback()
-		return fmt.Errorf("查询工单失败: %w", err)
 	}
 
 	// 检查良品数量是否足够扣减
@@ -741,14 +819,18 @@ func GetDeviceRuns(deviceID int, startTime, endTime *time.Time) ([]*models.ProPr
 
 // IncrementProductionQtyByDevice 根据设备ID增加产量（同时更新工单和班次）
 func IncrementProductionQtyByDevice(deviceID int, okQtyDelta, ngQtyDelta int) error {
-	// 1. 查找该设备当前活动的运行记录
+	// 1. 查找该设备当前活动且工单仍处于生产中的运行记录。
+	// CN: 只允许生产中工单接收产量，避免完工/暂停/关闭工单继续吃数。
+	// EN: Only running orders may receive output, preventing completed/paused/closed orders from being updated.
+	// JP: 生産中の工単のみ産量を受け取り、完了・一時停止・終了工単への誤加算を防ぐ。
 	var run models.ProProductionRun
-	err := DB.Where("device_id = ? AND end_time IS NULL", deviceID).
-		Order("id DESC").
+	err := DB.Joins("JOIN pro_orders o ON o.id = pro_production_runs.order_id").
+		Where("pro_production_runs.device_id = ? AND pro_production_runs.end_time IS NULL AND o.status = ?", deviceID, 1).
+		Order("pro_production_runs.id DESC").
 		First(&run).Error
 
 	if err != nil {
-		return fmt.Errorf("设备%d没有活动的运行记录，请先在生产管理页面点击\"开工\"", deviceID)
+		return fmt.Errorf("设备%d没有生产中的活动运行记录，请先在生产管理页面点击\"开工\"", deviceID)
 	}
 
 	// 2. 调用现有的 UpdateProductionRun 方法（会自动更新工单）

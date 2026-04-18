@@ -33,6 +33,65 @@ import (
 	"gorm.io/gorm"
 )
 
+// deleteShiftCascade 手动删除单个班次及其全部休息段。
+// CN: 运行时关闭了 GORM 自动外键迁移，不能依赖数据库级 ON DELETE CASCADE，必须在业务层显式删除子记录。
+// EN: Foreign-key auto migration is disabled, so database-level ON DELETE CASCADE cannot be relied on here.
+// JP: 外部キー自動マイグレーションが無効なため、DB の ON DELETE CASCADE に依存せず業務層で子レコードを明示削除する。
+func deleteShiftCascade(tx *gorm.DB, shiftID int) error {
+	if err := tx.Where("shift_id = ?", shiftID).Delete(&models.SysShiftBreak{}).Error; err != nil {
+		return fmt.Errorf("删除班次休息段(shift_id=%d)失败: %w", shiftID, err)
+	}
+	if err := tx.Delete(&models.SysShift{}, shiftID).Error; err != nil {
+		return fmt.Errorf("删除班次(id=%d)失败: %w", shiftID, err)
+	}
+	return nil
+}
+
+// deleteScheduleCascade 手动删除时间安排组及其全部班次/休息段，并先解除设备绑定。
+// CN: 旧库没有真实外键时，直接删 sys_shift_schedules 会留下残留启用班次，后续逻辑日计算会误读这些脏数据。
+// EN: On legacy DBs without actual foreign keys, deleting only the parent schedule leaves active orphan shifts behind.
+// JP: 実外部キーがない旧 DB では親スケジュールだけ削除すると有効な孤立シフトが残り、後続計算が誤読する。
+func deleteScheduleCascade(tx *gorm.DB, scheduleID int) error {
+	var shiftIDs []int
+	if err := tx.Model(&models.SysShift{}).Where("schedule_id = ?", scheduleID).Pluck("id", &shiftIDs).Error; err != nil {
+		return fmt.Errorf("查询时间安排下属班次(id=%d)失败: %w", scheduleID, err)
+	}
+	for _, shiftID := range shiftIDs {
+		if err := deleteShiftCascade(tx, shiftID); err != nil {
+			return err
+		}
+	}
+	if err := tx.Model(&models.SysDevice{}).Where("schedule_id = ?", scheduleID).Update("schedule_id", nil).Error; err != nil {
+		return fmt.Errorf("解除设备与时间安排(id=%d)绑定失败: %w", scheduleID, err)
+	}
+	if err := tx.Delete(&models.SysShiftSchedule{}, scheduleID).Error; err != nil {
+		return fmt.Errorf("删除时间安排(id=%d)失败: %w", scheduleID, err)
+	}
+	return nil
+}
+
+// cleanupOrphanShiftData 清理已经失去父时间安排/父班次的历史脏数据。
+// CN: 这是对历史 bug 的止血，保证旧残留班次不会继续参与 GetShifts / GetCurrentShift / GetShiftsForLogicalDay。
+// EN: This is a defensive cleanup for historical orphan rows so they no longer affect runtime shift resolution.
+// JP: 過去バグで残った孤立行を防御的に清掃し、実行時のシフト判定へ流入させないための処置。
+func cleanupOrphanShiftData(tx *gorm.DB) error {
+	var orphanShiftIDs []int
+	if err := tx.Model(&models.SysShift{}).
+		Where("NOT EXISTS (SELECT 1 FROM sys_shift_schedules WHERE sys_shift_schedules.id = sys_shifts.schedule_id)").
+		Pluck("id", &orphanShiftIDs).Error; err != nil {
+		return fmt.Errorf("查询孤立班次失败: %w", err)
+	}
+	for _, shiftID := range orphanShiftIDs {
+		if err := deleteShiftCascade(tx, shiftID); err != nil {
+			return err
+		}
+	}
+	if err := tx.Where("NOT EXISTS (SELECT 1 FROM sys_shifts WHERE sys_shifts.id = sys_shift_breaks.shift_id)").Delete(&models.SysShiftBreak{}).Error; err != nil {
+		return fmt.Errorf("清理孤立休息段失败: %w", err)
+	}
+	return nil
+}
+
 // ─── Wails 前端可见的数据结构 ───────────────────────────────
 
 // ShiftBreak 班次内的单个休息时间段（Wails 传输用）
@@ -191,8 +250,10 @@ func (a *App) GetShifts() ([]ShiftConfig, error) {
 	}
 	var shifts []models.SysShift
 	if err := database.DB.
+		Joins("INNER JOIN sys_shift_schedules ON sys_shift_schedules.id = sys_shifts.schedule_id").
+		Where("sys_shift_schedules.is_active = ?", true).
 		Preload("Breaks").
-		Order("sort_order ASC, id ASC").
+		Order("sys_shift_schedules.sort_order ASC, sys_shifts.sort_order ASC, sys_shifts.id ASC").
 		Find(&shifts).Error; err != nil {
 		return nil, fmt.Errorf("查询班次配置失败: %w", err)
 	}
@@ -206,8 +267,10 @@ func (a *App) GetShifts() ([]ShiftConfig, error) {
 // SaveShiftSchedules 保存全部时间安排组（upsert 语义）
 //
 // CN: 对每个 Schedule：ID > 0 → UPDATE；ID = 0 → INSERT；DB 有但前端未传 → DELETE。
-//     DELETE 时先将关联设备的 schedule_id 置 NULL，再删除 schedule（CASCADE 清理 shifts/breaks）。
-//     Shift 级别：每个 schedule 内的 shifts 同样做 upsert，break 做全量替换。
+//
+//	DELETE 时先将关联设备的 schedule_id 置 NULL，再删除 schedule（CASCADE 清理 shifts/breaks）。
+//	Shift 级别：每个 schedule 内的 shifts 同样做 upsert，break 做全量替换。
+//
 // EN: Upsert schedules & their shifts; deleted schedules first NULL-out device.schedule_id, then CASCADE.
 // JP: スケジュールと配下シフトを upsert。削除時は設備の schedule_id を NULL にしてから CASCADE 削除。
 func (a *App) SaveShiftSchedules(schedules []ShiftScheduleConfig) error {
@@ -227,9 +290,15 @@ func (a *App) SaveShiftSchedules(schedules []ShiftScheduleConfig) error {
 	}
 
 	return database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := cleanupOrphanShiftData(tx); err != nil {
+			return err
+		}
+
 		// ── 1. Schedule 层 upsert ────────────────────────────
 		var existingSchedIDs []int
-		tx.Model(&models.SysShiftSchedule{}).Pluck("id", &existingSchedIDs)
+		if err := tx.Model(&models.SysShiftSchedule{}).Pluck("id", &existingSchedIDs).Error; err != nil {
+			return fmt.Errorf("查询现有时间安排失败: %w", err)
+		}
 		keepSchedSet := map[int]bool{}
 		for _, s := range schedules {
 			if s.ID > 0 {
@@ -238,10 +307,8 @@ func (a *App) SaveShiftSchedules(schedules []ShiftScheduleConfig) error {
 		}
 		for _, eid := range existingSchedIDs {
 			if !keepSchedSet[eid] {
-				// 先解除设备的绑定，再删 schedule（CASCADE 删 shifts + breaks）
-				tx.Model(&models.SysDevice{}).Where("schedule_id = ?", eid).Update("schedule_id", nil)
-				if err := tx.Delete(&models.SysShiftSchedule{}, eid).Error; err != nil {
-					return fmt.Errorf("删除时间安排(id=%d)失败: %w", eid, err)
+				if err := deleteScheduleCascade(tx, eid); err != nil {
+					return err
 				}
 			}
 		}
@@ -267,7 +334,9 @@ func (a *App) SaveShiftSchedules(schedules []ShiftScheduleConfig) error {
 
 			// ── 2. Shift 层 upsert（同一 schedule 内）────────
 			var existingShiftIDs []int
-			tx.Model(&models.SysShift{}).Where("schedule_id = ?", schedID).Pluck("id", &existingShiftIDs)
+			if err := tx.Model(&models.SysShift{}).Where("schedule_id = ?", schedID).Pluck("id", &existingShiftIDs).Error; err != nil {
+				return fmt.Errorf("查询时间安排%q的现有班次失败: %w", sched.Name, err)
+			}
 			keepShiftSet := map[int]bool{}
 			for _, sc := range sched.Shifts {
 				if sc.ID > 0 {
@@ -276,12 +345,19 @@ func (a *App) SaveShiftSchedules(schedules []ShiftScheduleConfig) error {
 			}
 			for _, eid := range existingShiftIDs {
 				if !keepShiftSet[eid] {
-					tx.Where("shift_id = ?", eid).Delete(&models.SysShiftBreak{})
-					tx.Delete(&models.SysShift{}, eid)
+					if err := deleteShiftCascade(tx, eid); err != nil {
+						return err
+					}
 				}
 			}
 
 			for idx, sc := range sched.Shifts {
+				// CN: 班次启用状态完全跟随父级时间安排：父启用 → 子全部启用；父停用 → 子全部停用
+				// EN: Shift active state fully mirrors the parent schedule (parent on → all children on; off → all off)
+				// JP: シフトの有効状態は親スケジュールに完全追従（親 ON → 子全 ON、親 OFF → 子全 OFF）
+				effectiveActive := sched.IsActive
+				_ = sc.IsActive // 显式保留字段引用，未来若恢复独立控制可去掉
+
 				var shiftID int
 				if sc.ID > 0 {
 					shiftID = sc.ID
@@ -292,12 +368,14 @@ func (a *App) SaveShiftSchedules(schedules []ShiftScheduleConfig) error {
 						"start_min":   int8(sc.StartMin),
 						"end_hour":    int8(sc.EndHour),
 						"end_min":     int8(sc.EndMin),
-						"is_active":   sc.IsActive,
+						"is_active":   effectiveActive,
 						"sort_order":  idx,
 					}).Error; err != nil {
 						return fmt.Errorf("更新班次%q失败: %w", sc.Name, err)
 					}
-					tx.Where("shift_id = ?", sc.ID).Delete(&models.SysShiftBreak{})
+					if err := tx.Where("shift_id = ?", sc.ID).Delete(&models.SysShiftBreak{}).Error; err != nil {
+						return fmt.Errorf("清理班次%q旧休息段失败: %w", sc.Name, err)
+					}
 				} else {
 					row := models.SysShift{
 						ScheduleID: schedID,
@@ -306,7 +384,7 @@ func (a *App) SaveShiftSchedules(schedules []ShiftScheduleConfig) error {
 						StartMin:   int8(sc.StartMin),
 						EndHour:    int8(sc.EndHour),
 						EndMin:     int8(sc.EndMin),
-						IsActive:   sc.IsActive,
+						IsActive:   effectiveActive,
 						SortOrder:  idx,
 					}
 					if err := tx.Create(&row).Error; err != nil {
@@ -454,9 +532,12 @@ func (a *App) GetCurrentShift() (*ShiftConfig, error) {
 // 論理日内の1シフト情報（到達フラグ付き）。
 type LogicalDayShift struct {
 	ShiftConfig
-	HasArrived  bool   `json:"has_arrived"`  // 当前时刻已到达该班次开始时间
-	IsCurrent   bool   `json:"is_current"`   // 当前时刻正处于该班次时间窗口内
-	LogicalDate string `json:"logical_date"` // "YYYY-MM-DD"，该班次所属的逻辑日期
+	HasArrived        bool   `json:"has_arrived"`         // 当前时刻已到达该班次开始时间
+	IsCurrent         bool   `json:"is_current"`          // 当前时刻正处于该班次时间窗口内
+	LogicalDate       string `json:"logical_date"`        // "YYYY-MM-DD"，该班次所属的逻辑日期
+	CalendarDayOffset int    `json:"calendar_day_offset"` // 0=与逻辑日同自然日；1=逻辑日+1自然日（如三班 0:00-7:40）
+	// EN: 0=same calendar day as logical date; 1=logical date +1 day (e.g., 三班 running past midnight).
+	// JP: 0=論理日と同自然日；1=論理日+1日（例：三班 0:00-7:40 は翌自然日に運行）。
 }
 
 // GetShiftsForLogicalDay 返回当前逻辑日的所有活动班次列表
@@ -484,22 +565,16 @@ func (a *App) GetShiftsForLogicalDay() ([]LogicalDayShift, error) {
 		return []LogicalDayShift{}, nil
 	}
 
-	// 找 5:00 之后的第一个班次作为逻辑日边界锚点
-	const logicalBoundaryHour = 5
-	var anchorShift *ShiftConfig
-	for i := range active {
-		if active[i].StartHour >= logicalBoundaryHour {
-			anchorShift = &active[i]
-			break
-		}
-	}
-	if anchorShift == nil {
-		anchorShift = &active[0] // 兜底：取第一个活动班次
-	}
+	// 逻辑日锚点 = sort_order 最小的活动班次（已按升序排列，取首元素）
+	// CN: 不依赖硬编码时刻；以最早班次的开始时间作为逻辑日分界。
+	// EN: Use the lowest-sort_order active shift start as the logical-day boundary; no hardcoded hour.
+	// JP: sort_order 最小シフトの開始時刻を論理日境界とし、ハードコード時刻に依存しない。
+	anchorShift := &active[0]
+	logicalBoundaryMin := anchorShift.StartHour*60 + anchorShift.StartMin
 
 	now := time.Now()
 	nowMin := now.Hour()*60 + now.Minute()
-	anchorStartMin := anchorShift.StartHour*60 + anchorShift.StartMin
+	anchorStartMin := logicalBoundaryMin
 
 	// 判断逻辑日属于今天还是昨天
 	var logicalBase time.Time
@@ -515,23 +590,33 @@ func (a *App) GetShiftsForLogicalDay() ([]LogicalDayShift, error) {
 		startMin := s.StartHour*60 + s.StartMin
 		endMin := s.EndHour*60 + s.EndMin
 
-		shiftStart := logicalBase.Add(time.Duration(startMin) * time.Minute)
+		// calendarDayOffset: 班次开始时间早于逻辑日锚点 → 该班次运行在逻辑日+1自然日（如三班 0:00-7:40）
+		// EN: If shift starts before the logical boundary, it runs on the next calendar day.
+		// JP: シフト開始が論理日境界より早い場合、そのシフトは翌自然日に運行する。
+		calendarDayOffset := 0
+		if startMin < logicalBoundaryMin {
+			calendarDayOffset = 1
+		}
+		calendarBase := logicalBase.AddDate(0, 0, calendarDayOffset)
+
+		shiftStart := calendarBase.Add(time.Duration(startMin) * time.Minute)
 		var shiftEnd time.Time
 		if endMin > startMin {
-			shiftEnd = logicalBase.Add(time.Duration(endMin) * time.Minute)
+			shiftEnd = calendarBase.Add(time.Duration(endMin) * time.Minute)
 		} else {
 			// 跨零点班次（如 22:00→06:00）
-			shiftEnd = logicalBase.Add(time.Duration(endMin+24*60) * time.Minute)
+			shiftEnd = calendarBase.Add(time.Duration(endMin+24*60) * time.Minute)
 		}
 
 		hasArrived := !now.Before(shiftStart)
 		isCurrent := hasArrived && now.Before(shiftEnd)
 
 		result[i] = LogicalDayShift{
-			ShiftConfig: s,
-			HasArrived:  hasArrived,
-			IsCurrent:   isCurrent,
-			LogicalDate: logicalDateStr,
+			ShiftConfig:       s,
+			HasArrived:        hasArrived,
+			IsCurrent:         isCurrent,
+			LogicalDate:       logicalDateStr,
+			CalendarDayOffset: calendarDayOffset,
 		}
 	}
 	return result, nil

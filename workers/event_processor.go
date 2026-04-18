@@ -273,7 +273,7 @@ func executeDatabaseAction(event *models.TaskEvent) (string, error) {
 
 	// ✅ 模式B: 优先检查预定义操作
 	if config.Operation != "" {
-		return executePreDefinedDBOperation(config, event.TriggerData)
+		return executePreDefinedDBOperation(config, event.TriggerData, event.TriggerTime)
 	}
 
 	// ⚠️ 模式A: 原始SQL（向后兼容，用于简单场景）
@@ -298,7 +298,7 @@ func executeDatabaseAction(event *models.TaskEvent) (string, error) {
 
 // executePreDefinedDBOperation 执行预定义的数据库操作
 // 这个函数是核心：它像一个路由器，根据操作类型调用对应的数据访问层函数
-func executePreDefinedDBOperation(config models.DatabaseActionConfig, triggerData map[string]interface{}) (string, error) {
+func executePreDefinedDBOperation(config models.DatabaseActionConfig, triggerData map[string]interface{}, triggerTime time.Time) (string, error) {
 	log.Printf("[EventProcessor] 📋 执行预定义操作: %s, 参数: %v", config.Operation, config.OpParams)
 
 	// 根据操作类型路由到对应的执行函数
@@ -320,7 +320,7 @@ func executePreDefinedDBOperation(config models.DatabaseActionConfig, triggerDat
 	// 生产记录操作
 	// ========================================
 	case models.DBOpIncrementProductionQty:
-		return execIncrementProductionQty(config.OpParams, triggerData)
+		return execIncrementProductionQty(config.OpParams, triggerData, triggerTime)
 
 	// ========================================
 	// 未来扩展：工单管理操作
@@ -549,7 +549,7 @@ func execEndDeviceStatus(params map[string]interface{}, triggerData map[string]i
 // 支持两种模式:
 //  1. 固定增量模式: 配置 ok_qty_delta/ng_qty_delta (如脉冲计数)
 //  2. 自动增量模式: 配置 use_change_delta=true (如累加计数器)
-func execIncrementProductionQty(params map[string]interface{}, triggerData map[string]interface{}) (string, error) {
+func execIncrementProductionQty(params map[string]interface{}, triggerData map[string]interface{}, triggerTime time.Time) (string, error) {
 	// 1. 提取参数
 	deviceID, err := getIntParam(params, triggerData, "device_id")
 	if err != nil {
@@ -608,12 +608,27 @@ func execIncrementProductionQty(params map[string]interface{}, triggerData map[s
 		counterValueValid = newExists
 
 		if oldExists && newExists && oldCounterValue == 0 && newCounterValue > 0 {
+			if varID, ok := getTriggerIntValue(triggerData, "var_id"); ok {
+				lastNonzero, found, err := database.GetLastNonzeroHistoryValue(int64(varID), triggerTime)
+				if err != nil {
+					return "", fmt.Errorf("查询产量计数器历史非零值失败: %w", err)
+				}
+				if found {
+					correctedDelta := correctProductionCounterDelta(okDelta, oldCounterValue, newCounterValue, &lastNonzero)
+					if correctedDelta != okDelta {
+						log.Printf("[execIncrementProductionQty] 🔧 按历史非零值修正计数器恢复: old=%d, new=%d, last_nonzero=%d, change=%d->%d",
+							oldCounterValue, newCounterValue, lastNonzero, okDelta, correctedDelta)
+						okDelta = correctedDelta
+					}
+				}
+			}
+
 			counterKey := getProductionCounterKey(deviceID, triggerData)
 			if lastValRaw, ok := productionCounterLastValue.Load(counterKey); ok {
 				lastCounterValue := lastValRaw.(int)
 				if lastCounterValue > 0 && newCounterValue >= lastCounterValue {
-					correctedDelta := newCounterValue - lastCounterValue
-					if correctedDelta >= 0 && correctedDelta < okDelta {
+					correctedDelta := correctProductionCounterDelta(okDelta, oldCounterValue, newCounterValue, &lastCounterValue)
+					if correctedDelta != okDelta {
 						log.Printf("[execIncrementProductionQty] 🔧 检测到瞬时置零恢复，修正增量: old=%d, new=%d, last=%d, change=%d->%d",
 							oldCounterValue, newCounterValue, lastCounterValue, okDelta, correctedDelta)
 						okDelta = correctedDelta
@@ -672,6 +687,20 @@ func execIncrementProductionQty(params map[string]interface{}, triggerData map[s
 	resultMsg := fmt.Sprintf("设备%d产量已更新 [%s]: +%d良品, +%d不良品（已同步到工单和班次）", deviceID, mode, okDelta, ngDelta)
 	log.Printf("[EventProcessor] ✅ %s", resultMsg)
 	return resultMsg, nil
+}
+
+// correctProductionCounterDelta 修正累计计数器从 0 恢复到非零值时的假增量。
+// CN: 设备重连/采集恢复常见 old=0,new=历史累计值，不能把恢复值当成本次产量。
+// EN: Reconnect recovery often reports old=0,new=historical total; do not count that total as new output.
+// JP: 再接続復旧では old=0,new=累積値 になりやすいため、その累積値を新規産量として数えない。
+func correctProductionCounterDelta(rawDelta, oldValue, newValue int, lastNonzero *int) int {
+	if rawDelta < 0 || oldValue != 0 || newValue <= 0 || lastNonzero == nil || *lastNonzero <= 0 {
+		return rawDelta
+	}
+	if newValue >= *lastNonzero {
+		return newValue - *lastNonzero
+	}
+	return newValue
 }
 
 // executeScriptAction 执行脚本动作

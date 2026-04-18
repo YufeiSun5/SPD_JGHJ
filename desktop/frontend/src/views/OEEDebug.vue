@@ -17,11 +17,21 @@
     </div>
 
     <!-- 顶部汇总卡片 -->
+    <div v-if="currentDebugGroup" class="summary-context">
+      <i class="fas fa-tv"></i>
+      <span>当前展示口径与驾驶舱一致：</span>
+      <strong>{{ currentDebugGroup.shift_name }}</strong>
+      <span class="shift-range">{{ currentDebugGroup.shift_range }}</span>
+    </div>
     <div class="summary-cards">
-      <!-- 今日OEE汇总 -->
+      <!-- 当前班次 OEE 汇总 -->
       <div class="summary-card" v-for="row in todaySummaryRows" :key="row.device_name">
         <div class="card-device">{{ row.device_name }}</div>
         <div class="card-metrics">
+          <div class="metric">
+            <span class="metric-label">生效CT</span>
+            <span class="metric-value">{{ row.cycle_time || '-' }}</span>
+          </div>
           <div class="metric">
             <span class="metric-label">总产量</span>
             <span class="metric-value primary">{{ row.total_products }}</span>
@@ -126,7 +136,7 @@
 
     <!-- 今日OEE逐小时明细（按班次分组） -->
     <div
-      v-for="group in shiftGroups"
+      v-for="group in visibleShiftGroups"
       :key="group.shift_id"
       class="section-card"
     >
@@ -148,6 +158,7 @@
             <tr>
               <th>时段</th>
               <th>设备</th>
+              <th>CT(s)</th>
               <th>t_run(s)</th>
               <th>t_plan(s)</th>
               <th>总产量</th>
@@ -167,6 +178,7 @@
             >
               <td>{{ row.time_period }}</td>
               <td>{{ row.device_name }}</td>
+              <td>{{ row.cycle_time || '-' }}</td>
               <td>{{ row.t_run }}</td>
               <td>{{ row.t_plan }}</td>
               <td :class="row.total_products > 0 ? 'ok' : ''">{{ row.total_products }}</td>
@@ -195,34 +207,25 @@ const shiftGroups = ref([])   // 按班次分组的 OEE 数据
 const monthlyQuality = ref([])
 const dailyQuality = ref([])
 
-// 今日合计行：从所有班次的合计行汇总（取各班次最后一行 time_period 含"合计"的行）
+const isSummaryRow = (row) => row?.time_period && row.time_period.includes('合计')
+
+const visibleShiftGroups = computed(() =>
+  shiftGroups.value.filter(g => g.shift_id === 0 || g.is_current || g.has_arrived !== false)
+)
+
+const currentDebugGroup = computed(() =>
+  visibleShiftGroups.value.find(g => g.is_current) ||
+  [...visibleShiftGroups.value].reverse().find(g => g.has_arrived) ||
+  visibleShiftGroups.value[0] ||
+  null
+)
+
+// CN: 顶部卡片只展示当前/最近已到达班次，与驾驶舱当班 OEE 口径一致。
+// EN: Top cards show only the current/latest arrived shift, matching the cockpit OEE scope.
+// JP: 上部カードは現在または直近到達済みシフトのみを表示し、コックピットの OEE 口径と一致させる。
 const todaySummaryRows = computed(() => {
-  const summaryMap = {}
-  for (const group of shiftGroups.value) {
-    const rows = group.rows || []
-    const summaryRow = rows.find(r => r.time_period && r.time_period.includes('合计'))
-    if (summaryRow) {
-      const key = summaryRow.device_name
-      if (!summaryMap[key]) {
-        summaryMap[key] = { ...summaryRow, _shift: group.shift_name }
-      }
-    }
-  }
-  // 如果只有一个班次，直接用其合计行（含全部设备）
-  if (shiftGroups.value.length <= 1) {
-    return Object.values(summaryMap)
-  }
-  // 多班次：取全量合计（最后一个班次的合计行通常是全天合计，若后端按逻辑日合并）
-  // 这里直接展示各班次的班次合计，不再跨班次汇总（调试用途，粒度更细）
-  const results = []
-  for (const group of shiftGroups.value) {
-    const rows = group.rows || []
-    const summaryRow = rows.find(r => r.time_period && r.time_period.includes('合计'))
-    if (summaryRow) {
-      results.push({ ...summaryRow, device_name: `${group.shift_name} - ${summaryRow.device_name}` })
-    }
-  }
-  return results
+  const rows = currentDebugGroup.value?.rows || []
+  return rows.filter(isSummaryRow)
 })
 
 // 本月良品率汇总计算
@@ -341,6 +344,27 @@ onMounted(() => {
 .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* 顶部汇总卡片 */
+.summary-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(0,170,255,0.18);
+  border-radius: 8px;
+  color: rgba(255,255,255,0.72);
+  background: rgba(0,170,255,0.05);
+  font-size: 13px;
+}
+
+.summary-context i {
+  color: #00aaff;
+}
+
+.summary-context strong {
+  color: rgba(255,255,255,0.9);
+}
+
 .summary-cards {
   display: flex;
   gap: 16px;
@@ -463,7 +487,7 @@ onMounted(() => {
   border-top: 1px solid rgba(0,170,255,0.2);
 }
 
-.oee-table { min-width: 900px; }
+.oee-table { min-width: 980px; }
 
 /* 颜色 */
 .ok { color: #4ade80 !important; }

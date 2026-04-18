@@ -119,11 +119,82 @@ type VariableRow struct {
 	StoreMode     int      `gorm:"column:store_mode"`
 	StoreCycle    int      `gorm:"column:store_cycle"`
 	StoreDeadband float64  `gorm:"column:store_deadband"`
+
+	SuspiciousValue       *float64 `gorm:"column:suspicious_value"`
+	DebounceThreshold     *float64 `gorm:"column:debounce_threshold"`
+	StartupSnapshotEnable *int     `gorm:"column:startup_snapshot_enable"`
 }
 
 // TableName 指定表名
 func (VariableRow) TableName() string {
 	return "sys_variables"
+}
+
+// EnsureVariableAcquisitionConfigColumns 补齐采集层防抖/启动快照配置列。
+// CN: 这些列属于 sys_variables 的可选增强；启动时幂等补列，老库不需要手工先改表。
+// EN: These are optional sys_variables extensions; startup adds them idempotently so legacy databases still boot.
+// JP: これらは sys_variables の任意拡張列であり、起動時に冪等追加して旧DBでも起動できる。
+func EnsureVariableAcquisitionConfigColumns() error {
+	if DB == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	columns := []struct {
+		name string
+		sql  string
+	}{
+		{
+			name: "suspicious_value",
+			sql:  "ALTER TABLE sys_variables ADD COLUMN suspicious_value DOUBLE NULL DEFAULT NULL COMMENT '可疑抖动值，NULL=关闭采集防抖'",
+		},
+		{
+			name: "debounce_threshold",
+			sql:  "ALTER TABLE sys_variables ADD COLUMN debounce_threshold DOUBLE NULL DEFAULT 5 COMMENT '采集防抖起滤阈值，LastValidValue 大于该值才拦截可疑值'",
+		},
+		{
+			name: "startup_snapshot_enable",
+			sql:  "ALTER TABLE sys_variables ADD COLUMN startup_snapshot_enable TINYINT NULL DEFAULT NULL COMMENT '启动首帧快照开关，NULL=兼容旧行为，1=开启，0=关闭'",
+		},
+	}
+
+	for _, col := range columns {
+		if DB.Migrator().HasColumn("sys_variables", col.name) {
+			continue
+		}
+		if err := DB.Exec(col.sql).Error; err != nil {
+			return fmt.Errorf("补齐 sys_variables.%s 失败: %w", col.name, err)
+		}
+		log.Printf("[Database] ✅ 已补齐 sys_variables.%s", col.name)
+	}
+
+	return nil
+}
+
+// VariableAcquisitionConfigAvailable 返回采集增强列是否已存在。
+func VariableAcquisitionConfigAvailable() bool {
+	if DB == nil {
+		return false
+	}
+	return DB.Migrator().HasColumn("sys_variables", "suspicious_value") &&
+		DB.Migrator().HasColumn("sys_variables", "debounce_threshold") &&
+		DB.Migrator().HasColumn("sys_variables", "startup_snapshot_enable")
+}
+
+// AppendVariableAcquisitionConfig 按实际表结构追加可选列，避免老表更新/创建时报 Unknown column。
+func AppendVariableAcquisitionConfig(fields map[string]interface{}, variable VariableRow) map[string]interface{} {
+	if DB == nil {
+		return fields
+	}
+	if DB.Migrator().HasColumn("sys_variables", "suspicious_value") {
+		fields["suspicious_value"] = variable.SuspiciousValue
+	}
+	if DB.Migrator().HasColumn("sys_variables", "debounce_threshold") {
+		fields["debounce_threshold"] = variable.DebounceThreshold
+	}
+	if DB.Migrator().HasColumn("sys_variables", "startup_snapshot_enable") {
+		fields["startup_snapshot_enable"] = variable.StartupSnapshotEnable
+	}
+	return fields
 }
 
 // LoadVariables 从数据库加载所有变量配置
@@ -148,18 +219,19 @@ func LoadVariables() ([]*models.Tag, error) {
 	var tags []*models.Tag
 	for _, row := range rows {
 		tag := &models.Tag{
-			VarID:         row.ID,
-			VarName:       row.VarName,
-			JSONPath:      row.JSONPath,
-			ScaleFactor:   row.ScaleFactor,
-			OffsetVal:     row.OffsetVal,
-			AlarmEnable:   row.AlarmEnable,
-			StoreMode:     row.StoreMode,
-			StoreCycle:    row.StoreCycle,
-			StoreDeadband: row.StoreDeadband,
-			DataType:      "FLOAT", // 默认值
-			RWMode:        "R",     // 默认只读
-			IsFirstUpdate: true,    // 🔥 冷启动保护：首次更新不触发任务
+			VarID:             row.ID,
+			VarName:           row.VarName,
+			JSONPath:          row.JSONPath,
+			ScaleFactor:       row.ScaleFactor,
+			OffsetVal:         row.OffsetVal,
+			AlarmEnable:       row.AlarmEnable,
+			StoreMode:         row.StoreMode,
+			StoreCycle:        row.StoreCycle,
+			StoreDeadband:     row.StoreDeadband,
+			DataType:          "FLOAT", // 默认值
+			RWMode:            "R",     // 默认只读
+			IsFirstUpdate:     true,    // 🔥 冷启动保护：首次更新不触发任务
+			DebounceThreshold: 5,
 		}
 
 		// 处理可空字段
@@ -192,6 +264,21 @@ func LoadVariables() ([]*models.Tag, error) {
 		}
 		if row.Deadband != nil {
 			tag.Deadband = *row.Deadband
+		}
+		if row.SuspiciousValue != nil {
+			tag.SuspiciousValue = row.SuspiciousValue
+			if lastNonzero, found, err := GetLastNonzeroHistoryValue(row.ID, time.Now()); err == nil && found {
+				lastValid := float64(lastNonzero)
+				tag.DebounceLastValidValue = &lastValid
+			} else if err != nil {
+				log.Printf("[Database] ⚠️ 读取变量 %d 启动防抖历史值失败: %v", row.ID, err)
+			}
+		}
+		if row.DebounceThreshold != nil {
+			tag.DebounceThreshold = *row.DebounceThreshold
+		}
+		if row.StartupSnapshotEnable != nil {
+			tag.StartupSnapshotEnable = row.StartupSnapshotEnable
 		}
 
 		tags = append(tags, tag)

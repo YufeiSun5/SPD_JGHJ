@@ -83,6 +83,26 @@
         <!-- 第二行：条件筛选 -->
         <div class="filter-line">
           <div class="filter-group">
+            <label><i class="fas fa-layer-group"></i> 时间安排：</label>
+            <div class="custom-select schedule-select">
+              <select v-model="filterScheduleID" @change="onScheduleChange">
+                <option :value="null">全部时间安排</option>
+                <option v-for="s in schedules" :key="s.id" :value="s.id">{{ s.name || ('时间安排 #' + s.id) }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="filter-group">
+            <label><i class="fas fa-business-time"></i> 班次：</label>
+            <div class="custom-select shift-select">
+              <select v-model="filterShiftID">
+                <option :value="null">全部班次</option>
+                <option v-for="s in shiftOptions" :key="s.id" :value="s.id">
+                  {{ s.name }}（{{ fmtShiftWindow(s) }}）
+                </option>
+              </select>
+            </div>
+          </div>
+          <div class="filter-group">
             <label><i class="fas fa-desktop"></i> 设备：</label>
             <div class="custom-select">
               <select v-model="filterDeviceID" @change="loadSnapshots">
@@ -310,6 +330,8 @@ const localDTDaysAgo = (n, h = 0, mi = 0) => {
 
 const startDate       = ref(localDTDaysAgo(6, 0, 0))
 const endDate         = ref(localDT(new Date(), 23, 59))
+const filterScheduleID = ref(null)
+const filterShiftID   = ref(null)
 const filterDeviceID  = ref(null)
 const filterTeamID    = ref(null)
 const filterStaffName = ref('')
@@ -327,31 +349,76 @@ const applyQuick = (q) => {
 }
 
 // ── 数据 ─────────────────────────────────────────────────
-const snapshots  = ref([])
+const snapshotRows = ref([])
+const schedules  = ref([])
 const devices    = ref([])
 const teams      = ref([])
 const staffList  = ref([])
 const loaded     = ref(false)
 
+const fmtShiftWindow = (shift) => {
+  const pad = (n) => String(n ?? 0).padStart(2, '0')
+  return `${pad(shift.start_hour)}:${pad(shift.start_min)}-${pad(shift.end_hour)}:${pad(shift.end_min)}`
+}
+
+const shiftOptions = computed(() => {
+  const scheduleID = Number(filterScheduleID.value || 0)
+  const result = []
+  const seen = new Set()
+  ;(schedules.value || []).forEach((schedule) => {
+    if (scheduleID > 0 && Number(schedule.id) !== scheduleID) return
+    ;(schedule.shifts || []).forEach((shift) => {
+      if (shift.is_active === false || shift.is_active === 0) return
+      const id = Number(shift.id || 0)
+      if (!id || seen.has(id)) return
+      seen.add(id)
+      result.push(shift)
+    })
+  })
+  return result
+})
+
+// CN: 班次筛选在已查询快照上本地裁剪，保留后端 GetShiftSnapshots 的 SQL 排序，不额外扩大 Wails 接口。
+// EN: Shift filtering trims the fetched snapshot rows locally, preserving backend SQL order without expanding the Wails API.
+// JP: シフト絞り込みは取得済みスナップショットをローカルで絞り、Wails APIを増やさずバックエンドのSQL順序を維持する。
+const snapshots = computed(() => {
+  const shiftID = Number(filterShiftID.value || 0)
+  if (!shiftID) return snapshotRows.value
+  return snapshotRows.value.filter((row) => Number(row.shift_id || 0) === shiftID)
+})
+
+const onScheduleChange = () => {
+  const shiftID = Number(filterShiftID.value || 0)
+  if (shiftID && !shiftOptions.value.some((shift) => Number(shift.id) === shiftID)) {
+    filterShiftID.value = null
+  }
+  loadSnapshots()
+}
+
+// CN: 快照表已保存生成时的 schedule_id，这里直接按用户创建的时间安排过滤，不回推设备当前配置。
+// EN: Snapshots store the schedule_id captured at generation time; filter that value directly.
+// JP: スナップショット生成時の schedule_id を保持しているため、現在の設備設定から逆算せず直接絞り込む。
 const loadSnapshots = async () => {
   try {
     const result = await window.go.main.App.GetShiftSnapshots(
       startDate.value, endDate.value,
-      filterDeviceID.value, filterTeamID.value,
+      filterScheduleID.value, filterDeviceID.value, filterTeamID.value,
       filterStaffName.value.trim()
     )
-    snapshots.value = result || []
+    snapshotRows.value = result || []
     loaded.value = true
   } catch (e) { console.error('查询快照失败:', e) }
 }
 
 const loadFilters = async () => {
   try {
-    const [devResult, teamResult, staffResult] = await Promise.all([
+    const [schedResult, devResult, teamResult, staffResult] = await Promise.all([
+      window.go.main.App.GetShiftSchedules(),
       window.go.main.App.GetAllDevices(),
       window.go.main.App.GetAllTeams(null),
       window.go.main.App.GetAllStaff(null, null),
     ])
+    schedules.value = schedResult || []
     devices.value   = devResult  || []
     teams.value     = teamResult || []
     staffList.value = (staffResult || [])
@@ -788,6 +855,8 @@ onMounted(() => { loadFilters(); loadSnapshots() })
   display: inline-block;
   min-width: 130px;
 }
+.custom-select.schedule-select { min-width: 168px; }
+.custom-select.shift-select { min-width: 176px; }
 .custom-select::after {
   content: '\f078';
   font-family: 'Font Awesome 5 Free';

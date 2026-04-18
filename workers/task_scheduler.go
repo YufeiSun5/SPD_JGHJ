@@ -49,6 +49,12 @@ type TaskScheduler struct {
 	// 🔥 去重机制: 防止条件任务在短时间内被多个协程重复触发
 	// key: "taskID_timestamp_ms", value: bool
 	recentTriggers sync.Map
+
+	// 🔥 条件任务边沿检测: 记录上次求值结果，只在 false→true 时触发
+	// CN: 防止条件持续为真时每个周期都重复触发（如设备持续离线导致日志暴增）
+	// EN: Prevents repeated triggers while condition stays true (e.g. device stays offline).
+	// JP: 条件が真のまま維持されても繰り返し発火しないよう、前回結果を記録する。
+	conditionLastResult map[int64]bool
 }
 
 var globalScheduler *TaskScheduler
@@ -56,10 +62,11 @@ var globalScheduler *TaskScheduler
 // InitTaskScheduler 初始化任务调度器
 func InitTaskScheduler() *TaskScheduler {
 	globalScheduler = &TaskScheduler{
-		scheduledTasks:  make(map[int64]*models.Task),
-		dataChangeTasks: make(map[int64]*models.Task),
-		conditionTasks:  make(map[int64]*models.Task),
-		stopChan:        make(chan struct{}),
+		scheduledTasks:      make(map[int64]*models.Task),
+		dataChangeTasks:     make(map[int64]*models.Task),
+		conditionTasks:      make(map[int64]*models.Task),
+		stopChan:            make(chan struct{}),
+		conditionLastResult: make(map[int64]bool),
 	}
 	return globalScheduler
 }
@@ -218,11 +225,17 @@ func (ts *TaskScheduler) checkScheduledTasks(now time.Time) {
 				result, err := evaluateCondition(task.ConditionExpr, nil)
 				if err != nil {
 					log.Printf("[TaskScheduler-Scanner] ⚠️ 条件表达式求值失败 - %s: %v", task.TaskName, err)
-				} else if result {
-					log.Printf("[TaskScheduler-Scanner] ✅ 条件满足，触发任务 - %s", task.TaskName)
-					ts.triggerTask(task, now, nil, 0)
 				} else {
-					// 条件不满足，不输出日志（避免刷屏）
+					// 边沿检测：只在 false→true 跳变时触发
+					// CN: 条件持续为真时不重复触发，防止日志爆涨（如设备持续离线）
+					// EN: Only fire on false→true rising edge; skip while condition stays true.
+					// JP: false→true の立ち上がりエッジのみ発火し、条件が真のまま繰り返さない。
+					prevResult := ts.conditionLastResult[task.TaskID]
+					if result && !prevResult {
+						log.Printf("[TaskScheduler-Scanner] ✅ 条件上升沿，触发任务 - %s", task.TaskName)
+						ts.triggerTask(task, now, nil, 0)
+					}
+					ts.conditionLastResult[task.TaskID] = result
 				}
 			} else {
 				// 普通定时任务，直接触发

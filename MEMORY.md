@@ -11,6 +11,41 @@
 # - 当前目录整理: 根目录暴露的业务 Markdown 已收口到 docs，根目录暴露的 SQL 脚本已收口到 sql；AGENTS.md、MEMORY.md、README.md 继续保留在根目录。
 # - 当前文档状态: README 仍带有旧的 Gin API 项目表述，后续如继续整理文档，应优先按现有 Wails 桌面架构修正。
 #
+# ── OEE 设备级 CT 口径统一（2026-04-18）────────────────────────────────────
+# - 甲方要求两台设备可设置不同 CT；OEE 计算链路已统一按设备读取 sys_devices.cycle_time。
+# - Wails 绑定 GetHourlyOEE 已改为无参接口：前端不再传 DeviceOEEConfig，后端统一从 DB 读取设备 schedule_id + cycle_time，
+#   按 schedule_id 分组计算 OEE；设备 CT 为空时才回退系统默认 CT（user_config.production_coefficient）。
+# - 旧的单点节拍绑定 GetProductionCoefficient / SetProductionCoefficient / GetProductionCoefficientFromEnv 已移除；
+#   系统默认 CT 只通过 GetSystemConfig / SetSystemConfig 管理，作为未配置设备 CT 的兜底值。
+# - DebugOEEByShift 改为与驾驶舱一致：使用设备级 CT、只展示已到达班次、当前班次按 NOW() 截断计划时间，不再 full-day 强行展开。
+# - OEEDebug.vue 顶部汇总改为当前/最近已到达班次，且保留两台设备各自合计行和生效 CT，避免旧逻辑只取第一条合计行漏掉设备。
+# - Quality.vue 工单性能稼动率、详情理论时间、CSV 理论时间已按工单 target_device_id 的设备 CT 计算；无设备 CT 时用系统默认 CT。
+# - sql/spd_jghj.sql 的 sys_devices 基线补齐 schedule_id 和 cycle_time，避免新环境只导 SQL 时缺列。
+#
+# ── 采集层产量防抖与启动快照配置（2026-04-16）──────────────────────────────
+# - sys_variables 新增可选配置列：suspicious_value（NULL=关闭采集防抖）、debounce_threshold（默认5）、
+#   startup_snapshot_enable（NULL=兼容旧首帧行为，1=开启，0=关闭）。
+# - 应用启动时 database.EnsureVariableAcquisitionConfigColumns() 会幂等补齐这些列；老表读写路径仍做列存在性判断，
+#   避免 Unknown column 影响基础点位创建/更新。
+# - models.Tag.ApplyNumericSample() 在 LogicWorker 更新内存前执行观察窗清洗：
+#   LVV > threshold 且收到 suspicious_value 时先缓冲不入库、不触发任务、不更新 CurrentValue；
+#   下一个有效值 >= LVV 时丢弃可疑值，下一个有效值 < LVV 时补发一个可疑值作为真实复位基准。
+#   观察窗不超时，长期停在可疑值时不会落库，直到下一次非可疑值到来。
+# - 低计数值保护：LVV <= threshold 时可疑值直接放行，保留 1,0,1 / 5,0,3 这类真实小数值复位。
+# - 启动首帧可疑值修正：开启防抖的点位会在加载时预热 sys_data_history 最近非零值；
+#   若首帧就是 suspicious_value 且历史 LVV > threshold，先挂起不执行 InitOnly 快照。
+#   下一帧 >= 历史 LVV 时丢弃首帧可疑值并把下一帧作为启动快照；下一帧 < 历史 LVV 时补发可疑值再处理新值。
+# - DeviceConfig.vue 已增加可疑抖动值、起滤阈值、启动快照三项配置；页面继续通过 Wails App 方法读写。
+# - 验证：go test ./...、go build ./...、PowerShell 7 环境下 npm run build 已通过。
+#
+# ── 工单数量修复口径确认（2026-04-16）──────────────────────────────────────
+# - 工单产量口径已确认：产量累计点位增量 = actual_qty（总产量），不是 ok_qty。
+# - NG 数量来自 NG+1 / NG-1 脉冲净值；现场确认现有 NG 与 NG-1 统计正确时，历史修复 SQL 不应覆盖 ng_qty。
+# - OK 数量公式固定为 ok_qty = actual_qty - ng_qty；修复顺序应先按累计产量点位和工单/运行时间窗口重算 actual_qty，
+#   再按公式修 ok_qty，避免把总产量当 OK 或重复扣 NG。
+# - 历史修复 SQL 必须默认 START TRANSACTION + 预览差异 + ROLLBACK；确认无误后再把最后一行改为 COMMIT。
+#   默认先处理已完工工单；生产中工单因结束时间使用 NOW()，不建议混在第一轮批量修复里。
+#
 # ── 前端 UI 规范（已落地，2026-04-13）──────────────────────────────────────
 # - 弹窗组件统一样式: ShiftModal / ActiveDevicesModal / SessionHistoryModal / StaffModal / TeamModal
 #   五个组件的 CSS 已统一为 rgba(30,40,60,0.95) + blur(20px) + border-radius:12px，头部无渐变，
@@ -89,6 +124,60 @@
 #   ② 清理 sys_device_status 中 end_time IS NULL 的悬挂记录
 #   ③ 删除重叠/无效状态区间
 #   ④ 删除异常快照后通过 BatchRegenerateShiftSnapshots 回填
+#
+# ── 快照逻辑日临界修复（2026-04-15）──────────────────────────────────────────
+# - 问题: checkAndGenerateSnapshots 直接用迭代的日历日作为 snapshot_date，
+#   不知道"逻辑日临界时刻"概念。三班(0:00-7:40)在日历次日运行，但应属于前一个逻辑日。
+#   结果：启动后立即为当天凌晨的三班生成了 snapshot_date="今天" 的错误快照。
+# - 修复: desktop/app_snapshot.go — checkAndGenerateSnapshots：
+#   ① 检查窗口从2天扩为3天（day-2, day-1, today），防止逻辑日+日历偏移后漏检。
+#   ② 每个 sched 循环内，找 sort_order 最小的活跃班次的 start_min 作为 logicalBoundaryMin。
+#   ③ 对每个班次：若 shiftStartMin < logicalBoundaryMin → calendarDayOffset=1（日历次日运行）。
+#   ④ calendarBase = logicalDate + calendarDayOffset（用于 resolveShiftDatetime 生成正确时间戳）。
+#   ⑤ dateStr 始终用 logicalDate（逻辑日），不再用 calendarBase。
+# - 已知约束: sort_order 是逻辑日语义的唯一依据，sort_order 最小 = 逻辑日第一班 = 临界时刻来源。
+# - 验证: go build ./... 通过；可用 BatchRegenerateShiftSnapshots 清除旧错误记录后回填。
+#
+# ── 条件任务日志爆炸修复（2026-04-15/16）── sys_task_execution_logs 暴增 227 万行 ──────────────
+# - 问题: task_type=3 条件任务（如设备离线/上线检测）配置了 interval_sec=5，
+#   每5秒评估一次条件；条件为真时无边沿检测，每个周期都触发一次写入。
+#   设备持续离线时，离线检测任务每5秒写一条日志 → 227万行 → 磁盘100% → MySQL I/O卡死 →
+#   应用启动时 InitDatabase 挂起，Wails 窗口永远无法打开（进程内存仅0.5MB）。
+# - 止血操作: 在数据库 UPDATE sys_tasks SET is_enabled=0 WHERE task_id IN (22,23,28,29);
+#   再 DELETE + OPTIMIZE TABLE sys_task_execution_logs 清理历史日志。
+# - 根治修复: workers/task_scheduler.go：
+#   ① TaskScheduler 结构体新增 conditionLastResult map[int64]bool 字段。
+#   ② InitTaskScheduler 初始化该 map。
+#   ③ checkScheduledTasks 内条件任务改为边沿触发：
+#      记录 prevResult = conditionLastResult[taskID]；
+#      只有 result==true && prevResult==false 时才调用 triggerTask；
+#      每次都更新 conditionLastResult[taskID] = result。
+#   效果：条件持续为真时只触发一次（false→true跳变），不再重复写日志。
+# - 附加修复: database/database.go — MySQL DSN 加入 timeout=5s&readTimeout=30s&writeTimeout=30s，
+#   防止 MySQL 不可达时 TCP 握手卡死启动（原来无超时，最长卡 2-3 分钟）。
+# - 恢复操作: 打包部署后执行 UPDATE sys_tasks SET is_enabled=1 WHERE task_id IN (22,23,28,29);
+# - 验证: go build ./... 通过（无输出）。
+#
+# ── OEE 逻辑日临界修复（2026-04-15）── GetShiftsForLogicalDay / buildShiftOEEWindow / buildScheduleOEEWindow
+# - 问题: GetShiftsForLogicalDay 使用硬编码 const logicalBoundaryHour=5 定位逻辑日锚点，
+#   且计算 shiftStart/shiftEnd 时直接用 logicalBase 而不考虑日历偏移，
+#   导致三班(0:00-7:40) 的 hasArrived/isCurrent 判断错误，
+#   buildShiftOEEWindow/buildScheduleOEEWindow 的时间窗口 SQL 也指向错误日期。
+#   影响范围: Cockpit.vue 实时 OEE、OEEDebug.vue 调试数据均错误。
+# - 修复:
+#   ① desktop/app_shifts.go — LogicalDayShift 结构体新增 CalendarDayOffset int 字段。
+#   ② GetShiftsForLogicalDay: 移除 logicalBoundaryHour=5 硬编码；改用 active[0]（sort_order最小）
+#      的 startMin 作为 logicalBoundaryMin；对每个班次若 startMin < logicalBoundaryMin → offset=1；
+#      以 calendarBase=logicalBase+offset 计算时间戳和设置 CalendarDayOffset。
+#   ③ desktop/app.go — buildShiftOEEWindow: 新增 hourOffset=CalendarDayOffset*24；
+#      startHourSQL/endHourSQL/HourStart/WorkStart/WorkEnd 全部加 hourOffset（保留原 crossMidnight 加24逻辑）；
+#      break 的 startH/endH 基础值改为 b.StartHour+hourOffset / b.EndHour+hourOffset。
+#   ④ desktop/app.go — buildScheduleOEEWindow: workStartMin/lastEndMin/lastStartMin/sStartMin/sEndRaw
+#      均加 +CalendarDayOffset*24*60，确保三班分钟数落在正确区间。
+# - 三班验证示例: 三班(0:00-7:40, CalendarDayOffset=1)
+#   → WorkStart="24:00", WorkEnd="31:40", HourStart=24, HourEnd=32
+#   → ADDTIME('2026-04-14','24:00:00')=2026-04-15 00:00:00 ✓
+# - 验证: go build ./... 通过（无输出）。
 #
 # ── ShiftReport 班次排序修复（2026-04-14）────────────────────────────────────
 # - 问题: GetShiftSnapshots ORDER BY 使用 shift_id ASC，导致同一天内早/中/夜班顺序固定按 id 升序，

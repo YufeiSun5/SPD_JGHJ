@@ -294,7 +294,6 @@ const dailyQualityTrend = ref([]) // 本月每日良品率趋势
 const staffEfficiency = ref([]) // 员工绩效数据
 const utilizationTrend = ref([]) // 利用率趋势数据
 const hourlyAlarmCount = ref([]) // 每小时报警数据
-const productionCoefficient = ref(10) // 理论节拍系数（秒/件），默认10秒
 const dailyWorkMinutes = ref(460) // 每日应工作分钟数（扣除休息后），默认460分钟
 const breakTimes = ref([]) // 休息时间段配置
 
@@ -787,50 +786,6 @@ const pastShiftsProdSummary = computed(() => {
 
 // ── 当班数据辅助 end ───────────────────────────────────────────────────────────
 
-// ✅ 保留旧的基于工单的性能稼动率计算（可能其他地方需要）
-const avgPerformanceEfficiencyByOrder = computed(() => {
-  // 筛选有效工单：有开工时间且良品数>0
-  const ordersWithTime = orders.value.filter(o => o.start_time && o.ok_qty > 0)
-  
-  if (ordersWithTime.length === 0) return 0
-  
-  // 计算每个工单的性能稼动率并求平均
-  const totalEfficiency = ordersWithTime.reduce((sum, order) => {
-    const efficiency = calculatePerformanceEfficiency(order)
-    return sum + efficiency
-  }, 0)
-  
-  return Math.round(totalEfficiency / ordersWithTime.length)
-})
-
-// ✅ 计算单个工单的性能稼动率
-// 公式：性能稼动率 = 理论时间 / 实际时间 × 100%
-// 理论时间 = 良品数 × 节拍（秒/件）
-// 实际时间 = used_seconds + 当前段用时（如果正在生产中）
-const calculatePerformanceEfficiency = (order) => {
-  if (order.ok_qty === 0) return 0
-  
-  // 计算实际用时（秒）
-  let actualSeconds = order.used_seconds || 0
-  
-  // 如果正在生产中且有当前开始时间，加上当前段用时
-  if (order.status === 1 && order.current_start_time) {
-    const currentStart = new Date(order.current_start_time)
-    const elapsed = Math.floor((Date.now() - currentStart.getTime()) / 1000)
-    actualSeconds += elapsed
-  }
-  
-  if (actualSeconds <= 0) return 0
-  
-  // 计算理论时间（秒）
-  const theoreticalSeconds = order.ok_qty * productionCoefficient.value
-  
-  // 性能稼动率 = 理论时间 / 实际时间 × 100%
-  const efficiency = (theoreticalSeconds / actualSeconds) * 100
-  
-  return Math.round(efficiency)
-}
-
 // 方法
 const getQualityClass = (rate) => {
   if (!rate || rate === '-') return 'normal'
@@ -1218,21 +1173,6 @@ const loadHourlyAlarmCount = async () => {
   }
 }
 
-// ✅ 加载理论节拍系数（用于计算性能稼动率）
-const loadProductionCoefficient = async () => {
-  try {
-    if (window.go?.main?.App?.GetProductionCoefficient) {
-      const coefficient = await window.go.main.App.GetProductionCoefficient()
-      productionCoefficient.value = coefficient
-      console.log('📊 理论节拍系数:', coefficient, '秒/件')
-    }
-  } catch (e) {
-    console.error('加载理论节拍系数失败:', e)
-    // 使用默认值 10 秒/件
-    productionCoefficient.value = 10
-  }
-}
-
 // ✅ 加载每日应工作分钟数（用于计算人员稼动率）
 const loadDailyWorkMinutes = async () => {
   try {
@@ -1290,28 +1230,7 @@ const loadHourlyOEE = async () => {
   try {
     if (window.go?.main?.App?.GetHourlyOEE) {
       console.log('🔍 开始加载每小时OEE数据...')
-      
-      // 构建设备配置（使用理论节拍系数）
-      const configs = [
-        {
-          device_id: 1,
-          device_name: "设备#1",
-          var_ok: 1,
-          var_ng_add: 72,
-          var_ng_sub: 71,
-          cycle_time: productionCoefficient.value || 100
-        },
-        {
-          device_id: 2,
-          device_name: "设备#2",
-          var_ok: 95,
-          var_ng_add: 97,
-          var_ng_sub: 96,
-          cycle_time: productionCoefficient.value || 100
-        }
-      ]
-      
-      const result = await window.go.main.App.GetHourlyOEE(configs)
+      const result = await window.go.main.App.GetHourlyOEE()
       hourlyOEE.value = result || []
       
       console.log('✅ 加载每小时OEE:', hourlyOEE.value.length, '条记录')
@@ -2160,7 +2079,6 @@ onMounted(async () => {
   console.log('📊 报警数和性能稼动率迷你图使用OEE接口数据')
   
   // ✅ 先加载配置参数
-  await loadProductionCoefficient() // 理论节拍系数（用于计算性能稼动率）
   await loadDailyWorkMinutes()      // 每日应工作分钟数（用于计算人员稼动率）
   await loadBreakTimes()            // 休息时间段配置（用于计算人员稼动率和OEE）
   

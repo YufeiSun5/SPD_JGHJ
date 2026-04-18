@@ -117,7 +117,7 @@ export function GetDeviceUtilizationTrend(arg1:any):Promise<Array<database.Devic
 
 export function GetHistoryData(arg1:number,arg2:string,arg3:string,arg4:number,arg5:number):Promise<main.HistoryDataResponse>;
 
-export function GetHourlyOEE(arg1:Array<database.DeviceOEEConfig>):Promise<Array<database.HourlyOEE>>;
+export function GetHourlyOEE():Promise<Array<database.HourlyOEE>>;
 
 export function GetHourlyProduction(arg1:any):Promise<Array<database.HourlyProduction>>;
 
@@ -131,10 +131,6 @@ export function GetMonthlyProductionAccurate(arg1:Array<database.DeviceVarConfig
 
 export function GetMonthlyQualityByOrder():Promise<Array<database.DeviceQualityStat>>;
 
-export function GetProductionCoefficient():Promise<number>;
-
-export function GetProductionCoefficientFromEnv():Promise<number>;
-
 export function GetRealHourlyProduction():Promise<Array<database.HourlyProductionPulse>>;
 
 export function GetRealtimeData():Promise<Array<main.TagData>>;
@@ -147,7 +143,7 @@ export function GetSessionStats(arg1:number):Promise<models.SessionStatusRespons
 
 export function GetShiftSchedules():Promise<Array<main.ShiftScheduleConfig>>;
 
-export function GetShiftSnapshots(arg1:string,arg2:string,arg3:any,arg4:any,arg5:string):Promise<Array<models.ProShiftSnapshot>>;
+export function GetShiftSnapshots(arg1:string,arg2:string,arg3:any,arg4:any,arg5:any,arg6:string):Promise<Array<models.ProShiftSnapshot>>;
 
 export function GetShifts():Promise<Array<main.ShiftConfig>>;
 
@@ -190,8 +186,6 @@ export function SetDailyWorkMinutes(arg1:number):Promise<void>;
 export function SetDeviceCycleTime(arg1:number,arg2:number):Promise<void>;
 
 export function SetDeviceSchedule(arg1:number,arg2:number):Promise<void>;
-
-export function SetProductionCoefficient(arg1:number):Promise<void>;
 
 export function SetSystemConfig(arg1:main.UserConfig):Promise<void>;
 

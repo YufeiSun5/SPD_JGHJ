@@ -18,28 +18,6 @@ export namespace database {
 	        this.quality_rate = source["quality_rate"];
 	    }
 	}
-	export class DeviceOEEConfig {
-	    device_id: number;
-	    device_name: string;
-	    var_ok: number;
-	    var_ng_add: number;
-	    var_ng_sub: number;
-	    cycle_time: number;
-	
-	    static createFrom(source: any = {}) {
-	        return new DeviceOEEConfig(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.device_id = source["device_id"];
-	        this.device_name = source["device_name"];
-	        this.var_ok = source["var_ok"];
-	        this.var_ng_add = source["var_ng_add"];
-	        this.var_ng_sub = source["var_ng_sub"];
-	        this.cycle_time = source["cycle_time"];
-	    }
-	}
 	export class DeviceQualityStat {
 	    device_id: number;
 	    device_name: string;
@@ -135,6 +113,7 @@ export namespace database {
 	export class HourlyOEE {
 	    time_period: string;
 	    device_name: string;
+	    cycle_time: number;
 	    total_run_sec: number;
 	    total_plan_sec: number;
 	    total_products: number;
@@ -152,6 +131,7 @@ export namespace database {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.time_period = source["time_period"];
 	        this.device_name = source["device_name"];
+	        this.cycle_time = source["cycle_time"];
 	        this.total_run_sec = source["total_run_sec"];
 	        this.total_plan_sec = source["total_plan_sec"];
 	        this.total_products = source["total_products"];
@@ -293,6 +273,9 @@ export namespace database {
 	    StoreMode: number;
 	    StoreCycle: number;
 	    StoreDeadband: number;
+	    SuspiciousValue?: number;
+	    DebounceThreshold?: number;
+	    StartupSnapshotEnable?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new VariableRow(source);
@@ -320,6 +303,9 @@ export namespace database {
 	        this.StoreMode = source["StoreMode"];
 	        this.StoreCycle = source["StoreCycle"];
 	        this.StoreDeadband = source["StoreDeadband"];
+	        this.SuspiciousValue = source["SuspiciousValue"];
+	        this.DebounceThreshold = source["DebounceThreshold"];
+	        this.StartupSnapshotEnable = source["StartupSnapshotEnable"];
 	    }
 	}
 
@@ -806,6 +792,7 @@ export namespace main {
 	    has_arrived: boolean;
 	    is_current: boolean;
 	    logical_date: string;
+	    calendar_day_offset: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new LogicalDayShift(source);
@@ -826,6 +813,7 @@ export namespace main {
 	        this.has_arrived = source["has_arrived"];
 	        this.is_current = source["is_current"];
 	        this.logical_date = source["logical_date"];
+	        this.calendar_day_offset = source["calendar_day_offset"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

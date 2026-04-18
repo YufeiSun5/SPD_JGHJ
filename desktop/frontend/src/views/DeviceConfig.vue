@@ -110,6 +110,9 @@
               <th width="100">存储模式</th>
               <th width="100">存储周期(秒)</th>
               <th width="100">存储死区</th>
+              <th width="110">可疑抖动值</th>
+              <th width="110">起滤阈值</th>
+              <th width="130">启动快照</th>
               <th width="80">报警</th>
               <th width="100">上上限(HH)</th>
               <th width="100">上限(H)</th>
@@ -122,7 +125,7 @@
           </thead>
           <tbody>
             <tr v-if="filteredVariables.length === 0">
-              <td colspan="22" class="empty-row">
+              <td colspan="25" class="empty-row">
                 <i class="fas fa-inbox"></i>
                 <p>暂无配置数据</p>
               </td>
@@ -268,6 +271,43 @@
                   class="input-field mini"
                   min="0"
                 />
+              </td>
+              <td>
+                <!-- CN: 留空表示关闭采集防抖；EN: empty disables acquisition debounce; JP: 空欄は収集デバウンス無効。 -->
+                <input
+                  type="number"
+                  v-model.number="row.SuspiciousValue"
+                  @input="markModified(row.ID)"
+                  step="0.01"
+                  placeholder="空=关闭"
+                  class="input-field mini"
+                />
+              </td>
+              <td>
+                <!-- CN: 只有 LastValidValue 大于该阈值才拦截可疑值，保护 1,0,1 真实复位。
+                     EN: Suspicious samples are held only when LastValidValue is above this threshold, preserving real 1,0,1 resets.
+                     JP: LastValidValue が閾値を超える時だけ疑わしい値を保留し、1,0,1 の実リセットを守る。 -->
+                <input
+                  type="number"
+                  v-model.number="row.DebounceThreshold"
+                  @input="markModified(row.ID)"
+                  :disabled="isDebounceDisabled(row)"
+                  step="0.01"
+                  min="0"
+                  placeholder="5"
+                  class="input-field mini"
+                />
+              </td>
+              <td>
+                <select
+                  v-model="row.StartupSnapshotEnable"
+                  @change="markModified(row.ID)"
+                  class="select-field"
+                >
+                  <option :value="null">兼容旧行为</option>
+                  <option :value="1">开启</option>
+                  <option :value="0">关闭</option>
+                </select>
               </td>
               <td>
                 <label class="switch">
@@ -466,6 +506,30 @@ const markModified = (id) => {
   modifiedIds.value.add(id)
 }
 
+const isDebounceDisabled = (row) => row.SuspiciousValue === null || row.SuspiciousValue === undefined || row.SuspiciousValue === ''
+
+const nullableNumber = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  const num = Number(value)
+  return Number.isFinite(num) ? num : null
+}
+
+const nullableSwitch = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  return Number(value)
+}
+
+// CN: 保存前统一清洗三态配置，避免空字符串被当成 0 写入而误启用防抖。
+// EN: Normalize tri-state acquisition fields before saving so an empty input is not written as 0 and accidentally enables debounce.
+// JP: 保存前に三状態設定を正規化し、空文字が 0 として保存され誤ってデバウンスを有効化しないようにする。
+const normalizeAcquisitionConfig = (row) => {
+  const normalized = { ...row }
+  normalized.SuspiciousValue = nullableNumber(row.SuspiciousValue)
+  normalized.DebounceThreshold = nullableNumber(row.DebounceThreshold)
+  normalized.StartupSnapshotEnable = nullableSwitch(row.StartupSnapshotEnable)
+  return normalized
+}
+
 // 切换选择
 const toggleSelect = (id) => {
   if (selectedIds.value.has(id)) {
@@ -493,7 +557,9 @@ const saveAll = async () => {
     saving.value = true
     
     // 收集修改的变量（只保存已存在的，不包括新增的）
-    const modifiedVars = variables.value.filter(v => v.ID > 0 && modifiedIds.value.has(v.ID))
+    const modifiedVars = variables.value
+      .filter(v => v.ID > 0 && modifiedIds.value.has(v.ID))
+      .map(normalizeAcquisitionConfig)
     
     if (!window.go || !window.go.main || !window.go.main.App) {
       throw new Error('Wails API 不可用')
@@ -537,7 +603,10 @@ const addNewVariable = () => {
     AlarmMsg: '',
     StoreMode: 0,
     StoreCycle: 0,
-    StoreDeadband: 0
+    StoreDeadband: 0,
+    SuspiciousValue: null,
+    DebounceThreshold: 5,
+    StartupSnapshotEnable: null
   }
   
   variables.value.unshift(newVar)
@@ -583,7 +652,10 @@ const saveNewVariable = async (row) => {
       AlarmMsg: row.AlarmMsg,
       StoreMode: row.StoreMode,
       StoreCycle: row.StoreCycle,
-      StoreDeadband: row.StoreDeadband
+      StoreDeadband: row.StoreDeadband,
+      SuspiciousValue: nullableNumber(row.SuspiciousValue),
+      DebounceThreshold: nullableNumber(row.DebounceThreshold),
+      StartupSnapshotEnable: nullableSwitch(row.StartupSnapshotEnable)
     }
     
     await window.go.main.App.CreateVariable(newVarData)

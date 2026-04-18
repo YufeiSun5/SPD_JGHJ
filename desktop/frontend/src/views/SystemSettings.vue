@@ -28,32 +28,6 @@
           <div class="card-hint">Production Parameters</div>
         </div>
         <div class="card-body">
-          <div class="setting-item">
-            <div class="setting-label">
-              <i class="fas fa-clock"></i>
-              <div>
-                <div class="label-text">默认单件加工时间（全局理论节拍）</div>
-                <div class="label-hint">设备未单独设置时使用此默认值，可在时间安排的设备列表中为每台设备单独配置</div>
-              </div>
-            </div>
-            <div class="setting-control">
-              <input 
-                v-model.number="config.productionCoefficient" 
-                type="number" 
-                min="0.1" 
-                step="0.1"
-                class="input-field"
-                placeholder="例如：100"
-              />
-              <span class="unit">秒/件</span>
-              <button class="btn-save" @click="saveProductionCoefficient">
-                <i class="fas fa-save"></i> 保存
-              </button>
-            </div>
-          </div>
-          
-          <div class="setting-divider"></div>
-
           <!-- 逻辑日工时汇总（由班次配置自动计算，只读展示） -->
           <div class="setting-item">
             <div class="setting-label">
@@ -188,15 +162,25 @@
                         <span class="device-assign-code">{{ dev.device_code }}</span>
                       </div>
                       <div class="device-ct-inline" @click.stop>
-                        <span class="ct-label">CT</span>
-                        <input
-                          type="number" min="0" step="0.1"
-                          class="ct-input-small"
-                          :value="dev.cycle_time || ''"
-                          :placeholder="String(config.productionCoefficient || 100)"
-                          @change="saveDeviceCT(dev, $event)"
-                        />
-                        <span class="ct-unit">s</span>
+                        <span class="ct-inline-label"><i class="fas fa-tachometer-alt"></i> 节拍 CT</span>
+                        <div class="ct-inline-input-wrap">
+                          <input
+                            type="number" min="0" step="0.1"
+                            class="ct-input-large no-spin"
+                            :value="dev.cycle_time || ''"
+                            placeholder="未设置"
+                            @change="saveDeviceCT(dev, $event)"
+                          />
+                          <span class="ct-inline-unit">秒/件</span>
+                          <button
+                            v-if="dev.cycle_time && dev.cycle_time > 0"
+                            class="btn-clear-ct-inline"
+                            title="清除独立 CT"
+                            @click="clearDeviceCT(dev)"
+                          >
+                            <i class="fas fa-times"></i>
+                          </button>
+                        </div>
                       </div>
                     </div>
                     <div v-if="!allDevices.length" class="breaks-empty">暂无设备</div>
@@ -356,15 +340,15 @@
         </div>
         <div class="card-body">
           <div class="info-section">
-            <h4><i class="fas fa-industry"></i> 单件加工时间（理论节拍）</h4>
+            <h4><i class="fas fa-tachometer-alt"></i> 单件加工时间（设备独立 CT）</h4>
             <ul>
-              <li>定义：完成一件产品的理论加工时间（秒）</li>
+              <li>定义：每台设备完成一件产品的理论加工时间（秒）</li>
               <li>用途：用于计算设备性能稼动率</li>
-              <li>公式：性能稼动率 = (理论节拍 × 良品数) / 实际加工时间 × 100%</li>
-              <li>示例：如果理论上每100秒完成1件，则填写 100</li>
+              <li>公式：性能稼动率 = (CT × 良品数) / 实际加工时间 × 100%</li>
+              <li>说明：每台设备必须单独配置 CT（在「关联设备」或「设备独立节拍」卡片中设置）；未配置的设备无法计算性能稼动率</li>
             </ul>
           </div>
-          
+
           <div class="info-section">
             <h4><i class="fas fa-business-time"></i> 逻辑日工时统计</h4>
             <ul>
@@ -409,7 +393,7 @@
           <div class="info-section info" style="margin-bottom:12px">
             <p style="margin:0;font-size:13px">
               <i class="fas fa-info-circle"></i>
-              为每台设备单独配置理论节拍（CT）；留空表示使用上方「全局默认 CT」。修改后即时生效，无需点击「保存全部」。
+              为每台设备单独配置理论节拍（CT）。留空表示该设备未配置 CT，性能稼动率将无法计算。修改后即时生效，无需点击「保存全部」。
             </p>
           </div>
 
@@ -446,16 +430,16 @@
                 <div class="ct-edit-row">
                   <input
                     type="number" min="0" step="0.1"
-                    class="ct-input-full"
+                    class="ct-input-full no-spin"
                     :value="dev.cycle_time || ''"
-                    :placeholder="String(config.productionCoefficient || 100)"
+                    placeholder="未设置"
                     @change="saveDeviceCT(dev, $event)"
                   />
                   <span class="ct-unit">s</span>
                   <button
                     v-if="dev.cycle_time && dev.cycle_time > 0"
                     class="btn-clear-ct"
-                    title="清除，恢复为全局默认"
+                    title="清除独立 CT"
                     @click="clearDeviceCT(dev)"
                   >
                     <i class="fas fa-times"></i>
@@ -464,7 +448,7 @@
               </span>
               <span class="dct-col dct-eff">
                 <span :class="['eff-ct-val', dev.cycle_time && dev.cycle_time > 0 ? 'eff-custom' : 'eff-global']">
-                  {{ dev.cycle_time && dev.cycle_time > 0 ? dev.cycle_time + ' s' : (config.productionCoefficient || 100) + ' s（全局）' }}
+                  {{ dev.cycle_time && dev.cycle_time > 0 ? dev.cycle_time + ' s' : '未设置' }}
                 </span>
               </span>
             </div>
@@ -506,7 +490,6 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 
 // 配置数据
 const config = ref({
-  productionCoefficient: 100.0,
   dailyWorkMinutes: 460,
   breakTimes: []
 })
@@ -600,7 +583,7 @@ const toggleDeviceSchedule = async (deviceID, scheduleID) => {
     rebuildDeviceMaps()
     showToast(newSchedID > 0 ? '设备已关联到此时间安排' : '设备关联已解除', 'success')
   } catch (e) {
-    showToast('操作失败: ' + e.message, 'error')
+    showToast('操作失败: ' + errMsg(e), 'error')
   }
 }
 
@@ -610,22 +593,23 @@ const saveDeviceCT = async (dev, event) => {
     const ct = isNaN(val) || val <= 0 ? 0 : val
     await window.go.main.App.SetDeviceCycleTime(dev.id, ct)
     dev.cycle_time = ct > 0 ? ct : null
-    showToast(ct > 0 ? `${dev.device_name} CT已设为 ${ct}s` : `${dev.device_name} CT已恢复为全局默认`, 'success')
+    showToast(ct > 0 ? `${dev.device_name} CT 已设为 ${ct}s` : `${dev.device_name} CT 已清除`, 'success')
   } catch (e) {
-    showToast('CT保存失败: ' + e.message, 'error')
+    showToast('CT保存失败: ' + errMsg(e), 'error')
   }
 }
 
-// clearDeviceCT 将设备 CT 清除为 NULL，恢复使用全局默认值
-// Clear device CT to NULL so it falls back to the global default.
-// 設備の CT を NULL にクリアし、グローバルデフォルトに戻す。
+// clearDeviceCT 将设备 CT 清除为 NULL。
+// CN: 清除后该设备不再参与性能稼动率计算，需重新填入才能生效。
+// EN: After clearing, the device no longer participates in performance-rate calculation until a new CT is set.
+// JP: クリア後は、CT を再設定するまで該設備は性能稼働率計算に参加しない。
 const clearDeviceCT = async (dev) => {
   try {
     await window.go.main.App.SetDeviceCycleTime(dev.id, 0)
     dev.cycle_time = null
-    showToast(`${dev.device_name} CT已恢复为全局默认（${config.value.productionCoefficient || 100}s）`, 'success')
+    showToast(`${dev.device_name} CT 已清除`, 'success')
   } catch (e) {
-    showToast('CT清除失败: ' + e.message, 'error')
+    showToast('CT清除失败: ' + errMsg(e), 'error')
   }
 }
 
@@ -660,8 +644,13 @@ const fmtMins = (mins) => {
 }
 
 // dailyWorkSummary 从所有时间安排的所有活动班次自动汇总净工时
+// CN: 班次启用状态完全跟随父级时间安排，因此只需过滤父级即可
+// EN: Shift active state mirrors the parent schedule, so only filtering the parent is needed
+// JP: シフトの有効状態は親スケジュールに完全追従するため、親側のみフィルタすればよい
 const dailyWorkSummary = computed(() => {
-  const allShifts = schedules.value.flatMap(g => g.shifts).filter(s => s.is_active)
+  const allShifts = schedules.value
+    .filter(g => g.is_active)
+    .flatMap(g => g.shifts)
   const rows = allShifts.map(s => {
     const shiftMins = spanMins(s.start_hour, s.start_min, s.end_hour, s.end_min)
     const breakMins = (s.breaks || []).reduce((sum, b) => sum + calculateDuration(b), 0)
@@ -698,7 +687,6 @@ const loadConfig = async () => {
       const result = await window.go.main.App.GetSystemConfig()
       if (result) {
         config.value = {
-          productionCoefficient: result.production_coefficient || 100.0,
           dailyWorkMinutes: result.daily_work_minutes || 460,
           breakTimes: (result.break_times || []).map(bt => ({
             id: bt.id,
@@ -714,39 +702,21 @@ const loadConfig = async () => {
     }
   } catch (e) {
     console.error('❌ 加载配置失败:', e)
-    showToast('加载配置失败: ' + e.message, 'error')
-  }
-}
-
-// 保存单件加工时间
-const saveProductionCoefficient = async () => {
-  try {
-    if (config.value.productionCoefficient <= 0) {
-      showToast('单件加工时间必须大于0', 'warning')
-      return
-    }
-    
-    if (window.go?.main?.App?.SetProductionCoefficient) {
-      await window.go.main.App.SetProductionCoefficient(config.value.productionCoefficient)
-      showToast('保存成功！单件加工时间已更新', 'success')
-      console.log('✅ 保存单件加工时间:', config.value.productionCoefficient)
-    }
-  } catch (e) {
-    console.error('❌ 保存失败:', e)
-    showToast('保存失败: ' + e.message, 'error')
+    showToast('加载配置失败: ' + errMsg(e), 'error')
   }
 }
 
 // 保存所有配置
-// 每日工时由班次配置自动计算并写回，不再单独保存
+// CN: 全局默认 CT 已废弃；本函数当前只委托班次保存（设备 CT 已在输入时即时保存）。
+// EN: Global default CT is removed; this only delegates to shift saving (per-device CT saves on input).
+// JP: グローバルデフォルト CT は廃止。本関数は班次保存に委譲する（設備ごとの CT は入力時に即時保存）。
 const saveAllConfig = async () => {
   try {
-    await saveProductionCoefficient()
     await saveShifts()
     showToast('所有配置保存成功！', 'success')
   } catch (e) {
     console.error('❌ 保存配置失败:', e)
-    showToast('保存配置失败: ' + e.message, 'error')
+    showToast('保存配置失败: ' + errMsg(e), 'error')
   }
 }
 
@@ -900,8 +870,19 @@ const loadSchedules = async () => {
     console.log('✅ 加载时间安排配置成功:', schedules.value.length, '个组')
   } catch (e) {
     console.error('❌ 加载时间安排配置失败:', e)
-    showToast('加载配置失败: ' + e.message, 'error')
+    showToast('加载配置失败: ' + errMsg(e), 'error')
   }
+}
+
+// errMsg 把 Wails 抛出的 error（可能是字符串、Error 或对象）安全转成可读文本
+// CN: Wails 绑定常以字符串形式 reject，不能直接读 e.message，否则会得到 undefined
+// EN: Wails bindings often reject with raw strings; reading e.message directly would yield undefined
+// JP: Wails バインドはしばしば文字列で reject するため、e.message を直接参照すると undefined になる
+function errMsg(e) {
+  if (!e) return '未知错误'
+  if (typeof e === 'string') return e
+  if (e.message) return e.message
+  try { return JSON.stringify(e) } catch { return String(e) }
 }
 
 // saveSchedules 保存全部时间安排组配置
@@ -924,20 +905,30 @@ const saveSchedules = async () => {
       }
     }
   }
+
+  // 主写入：失败才算保存失败
   try {
     await window.go.main.App.SaveShiftSchedules(schedules.value)
-    const totalNet = dailyWorkSummary.value.totalNet
-    if (totalNet > 0 && window.go?.main?.App?.SetDailyWorkMinutes) {
+  } catch (e) {
+    console.error('❌ SaveShiftSchedules 失败:', e)
+    showToast('保存失败: ' + errMsg(e), 'error')
+    return
+  }
+
+  // 后续步骤失败不影响保存结果，仅打印警告
+  const totalNet = dailyWorkSummary.value.totalNet
+  if (totalNet > 0 && window.go?.main?.App?.SetDailyWorkMinutes) {
+    try {
       await window.go.main.App.SetDailyWorkMinutes(totalNet)
       config.value.dailyWorkMinutes = totalNet
+    } catch (e) {
+      console.warn('⚠️ SetDailyWorkMinutes 失败（已忽略）:', e)
     }
-    showToast('时间安排配置保存成功！', 'success')
-    await loadSchedules()
-    await loadDevices()
-  } catch (e) {
-    console.error('❌ 保存时间安排配置失败:', e)
-    showToast('保存失败: ' + e.message, 'error')
   }
+  try { await loadSchedules() } catch (e) { console.warn('⚠️ loadSchedules 失败:', e) }
+  try { await loadDevices() }   catch (e) { console.warn('⚠️ loadDevices 失败:', e) }
+
+  showToast('时间安排配置保存成功！', 'success')
 }
 
 // saveShifts 兼容别处调用（实际委托给 saveSchedules）
@@ -1822,16 +1813,16 @@ onMounted(() => {
 .device-assign-item {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 14px;
-  border-radius: 20px;
+  gap: 10px;
+  padding: 8px 14px 8px 16px;
+  border-radius: 28px;
   border: 1px solid rgba(255,255,255,0.12);
   background: rgba(30, 40, 60, 0.5);
-  cursor: pointer;
-  font-size: 12px;
+  font-size: 13px;
   color: #8baabb;
   transition: all 0.18s;
   user-select: none;
+  min-height: 44px;
 }
 
 .device-assign-item:hover {
@@ -1866,41 +1857,114 @@ onMounted(() => {
 .device-ct-inline {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 10px;
   margin-left: auto;
   flex-shrink: 0;
+  padding: 6px 12px 6px 14px;
+  background: linear-gradient(135deg, rgba(0, 200, 150, 0.06), rgba(0, 150, 200, 0.04));
+  border: 1px solid rgba(0, 200, 150, 0.18);
+  border-radius: 10px;
+  transition: all 0.2s;
 }
 
-.ct-label {
-  font-size: 10px;
-  color: rgba(140,160,185,0.6);
+.device-ct-inline:hover {
+  border-color: rgba(0, 200, 150, 0.4);
+  background: linear-gradient(135deg, rgba(0, 200, 150, 0.1), rgba(0, 150, 200, 0.06));
+}
+
+.ct-inline-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: rgba(160, 200, 220, 0.85);
   font-weight: 600;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
 }
 
-.ct-input-small {
-  width: 52px;
-  padding: 2px 5px;
-  background: rgba(20, 30, 50, 0.6);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 4px;
-  color: #c0dde8;
-  font-size: 11px;
+.ct-inline-label i {
+  color: rgba(0, 200, 150, 0.8);
+  font-size: 12px;
+}
+
+.ct-inline-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ct-input-large {
+  width: 90px;
+  padding: 8px 12px;
+  background: rgba(15, 25, 40, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
   text-align: right;
   outline: none;
+  transition: all 0.2s;
+  letter-spacing: 0.5px;
 }
 
-.ct-input-small:focus {
-  border-color: rgba(0,200,150,0.5);
+.ct-input-large:focus {
+  border-color: rgba(0, 220, 160, 0.7);
+  background: rgba(15, 25, 40, 1);
+  box-shadow: 0 0 0 3px rgba(0, 220, 160, 0.12);
 }
 
-.ct-input-small::placeholder {
-  color: rgba(140,160,185,0.4);
+.ct-input-large::placeholder {
+  color: rgba(140, 160, 185, 0.4);
+  font-size: 13px;
+  font-weight: 400;
   font-style: italic;
 }
 
-.ct-unit {
-  font-size: 10px;
-  color: rgba(140,160,185,0.5);
+.ct-inline-unit {
+  font-size: 12px;
+  color: rgba(140, 160, 185, 0.8);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.btn-clear-ct-inline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: rgba(220, 100, 100, 0.18);
+  border-radius: 50%;
+  color: rgba(230, 140, 140, 1);
+  cursor: pointer;
+  font-size: 11px;
+  transition: all 0.15s;
+  margin-left: 2px;
+}
+
+.btn-clear-ct-inline:hover {
+  background: rgba(220, 100, 100, 0.4);
+  color: #fff;
+  transform: scale(1.1);
+}
+
+/* CN: 全局隐藏本页所有 number 输入的上下旋钮，统一无干扰风格 */
+/* EN: Globally remove number-input spin buttons within this view for a cleaner UI */
+/* JP: 本ビュー内のすべての number 入力のスピンボタンを非表示にし、UI をすっきり保つ */
+.no-spin::-webkit-outer-spin-button,
+.no-spin::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.no-spin,
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 /* ─── 设备独立CT配置表格 ──────────────────────────────── */
@@ -2036,4 +2100,3 @@ onMounted(() => {
   }
 }
 </style>
-

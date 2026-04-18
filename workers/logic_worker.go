@@ -254,19 +254,30 @@ func processMessage(workerID int, msg *models.MQTTMessage) {
 			// 字符串类型: 更新字符串值（带质量戳）
 			changed = tag.UpdateStringValue(strValue, msg.Timestamp, quality)
 		} else {
-			// 数值类型: 应用缩放和偏移后更新（带质量戳）
-			oldValue = tag.GetValue()
+			// CN: 数值采样先走采集层防抖，再更新内存；假 0 不进入任务、历史、报警和 SSE。
+			// EN: Numeric samples pass acquisition debounce before memory update; false zeros never reach tasks, history, alarms, or SSE.
+			// JP: 数値サンプルはメモリ更新前に収集層デバウンスを通し、偽の 0 をタスク・履歴・警報・SSEへ流さない。
 			processedValue = floatValue*tag.ScaleFactor + tag.OffsetVal
-			changed = tag.UpdateValue(processedValue, msg.Timestamp, quality)
+			changes := tag.ApplyNumericSample(processedValue, msg.Timestamp, quality)
+			for _, change := range changes {
+				// 🔍 特别关注可写变量1的变化
+				if tag.VarName == "可写变量1" {
+					log.Printf("[LogicWorker-%d] 🔥🔥🔥 可写变量1 变化检测: %.2f -> %.2f",
+						workerID, change.OldValue, change.NewValue)
+				}
+				changedTags = append(changedTags, &ChangedTagInfo{
+					Tag:       tag,
+					OldValue:  change.OldValue,
+					NewValue:  change.NewValue,
+					IsString:  false,
+					Timestamp: change.Timestamp,
+				})
+			}
+			changed = len(changes) > 0
 		}
 
 		// 记录变化的测点，留待 Pass 2 处理
-		if changed {
-			// 🔍 特别关注可写变量1的变化
-			if tag.VarName == "可写变量1" {
-				log.Printf("[LogicWorker-%d] 🔥🔥🔥 可写变量1 变化检测: %.2f -> %.2f",
-					workerID, oldValue, processedValue)
-			}
+		if changed && isString {
 			changedTags = append(changedTags, &ChangedTagInfo{
 				Tag:       tag,
 				OldValue:  oldValue,
@@ -275,8 +286,10 @@ func processMessage(workerID int, msg *models.MQTTMessage) {
 				StrValue:  strValue,
 				Timestamp: msg.Timestamp,
 			})
-		} else if isFirstUpdate && (tag.StoreMode == 1 || tag.StoreMode == 3) {
-			// 冷启动首包不触发任务/报警，但变动存储变量需要补存一次当前有效值。
+		} else if isFirstUpdate && tag.ShouldStartupSnapshot() && !tag.HasPendingDebounce() {
+			// CN: 冷启动首包只入库，不触发任务/报警；开关为 NULL 时兼容旧行为。
+			// EN: The cold-start first frame is stored only, without tasks/alarms; NULL keeps legacy behavior.
+			// JP: 起動直後の初回フレームは保存のみで、タスク/警報は起動しない。NULL は旧動作を維持する。
 			if !isString || strValue != "" {
 				changedTags = append(changedTags, &ChangedTagInfo{
 					Tag:       tag,

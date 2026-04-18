@@ -17,7 +17,10 @@ var DB *gorm.DB
 // InitDatabase 初始化数据库连接
 func InitDatabase(cfg *config.DatabaseConfig) error {
 	// MySQL DSN 格式: user:password@tcp(host:port)/dbname?charset=utf8mb4&parseTime=True&loc=Local
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+	// CN: timeout=5s 限制 TCP 握手超时，避免生产机 MySQL 不可达时卡死启动流程。
+	// EN: timeout=5s caps the TCP handshake so an unreachable MySQL host fails fast instead of blocking for minutes.
+	// JP: timeout=5s で TCP ハンドシェイクを制限し、MySQL 不到達時の起動ブロックを防ぐ。
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local&timeout=5s&readTimeout=30s&writeTimeout=30s",
 		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.DBName)
 
 	var err error

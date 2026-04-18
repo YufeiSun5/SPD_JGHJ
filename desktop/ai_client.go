@@ -188,7 +188,7 @@ func (a *App) QueryAIStream(question string) error {
 		errMsg := fmt.Sprintf("AI服务连接失败，请确保 FastAPI 服务运行在 %s", AI_SERVICE_URL)
 		fmt.Printf("❌ [AI Stream] %s\n", errMsg)
 		runtime.EventsEmit(a.ctx, "ai-stream-error", errMsg)
-		return fmt.Errorf(errMsg)
+		return fmt.Errorf("%s", errMsg)
 	}
 	defer resp.Body.Close()
 
@@ -198,7 +198,7 @@ func (a *App) QueryAIStream(question string) error {
 		errMsg := fmt.Sprintf("AI服务返回错误 (状态码 %d): %s", resp.StatusCode, string(body))
 		fmt.Printf("❌ [AI Stream] %s\n", errMsg)
 		runtime.EventsEmit(a.ctx, "ai-stream-error", errMsg)
-		return fmt.Errorf(errMsg)
+		return fmt.Errorf("%s", errMsg)
 	}
 
 	fmt.Printf("✅ [AI Stream] 连接成功，开始接收流式数据...\n")
@@ -231,7 +231,7 @@ func (a *App) QueryAIStream(question string) error {
 			errMsg := fmt.Sprintf("读取流失败: %v", err)
 			fmt.Printf("❌ [AI Stream] %s\n", errMsg)
 			runtime.EventsEmit(a.ctx, "ai-stream-error", errMsg)
-			return fmt.Errorf(errMsg)
+			return fmt.Errorf("%s", errMsg)
 		}
 
 		// 解析 SSE 格式: data: {...}
@@ -318,7 +318,7 @@ func (a *App) AddKnowledge(content string, source *string) (*AddKnowledgeRespons
 	}
 
 	if !result.Success {
-		return nil, fmt.Errorf(result.Message)
+		return nil, fmt.Errorf("%s", result.Message)
 	}
 
 	return &result, nil
@@ -355,7 +355,7 @@ func (a *App) DeleteKnowledge(knowledgeID string) (*DeleteKnowledgeResponse, err
 	}
 
 	if !result.Success {
-		return nil, fmt.Errorf(result.Message)
+		return nil, fmt.Errorf("%s", result.Message)
 	}
 
 	return &result, nil
@@ -392,7 +392,7 @@ func (a *App) DeleteKnowledgeBySource(source string) (*DeleteKnowledgeResponse, 
 	}
 
 	if !result.Success {
-		return nil, fmt.Errorf(result.Message)
+		return nil, fmt.Errorf("%s", result.Message)
 	}
 
 	return &result, nil
@@ -496,7 +496,7 @@ func (a *App) LikeAIAnswer(question string, answer string, relevantDocs []Releva
 	}
 
 	if !result.Success {
-		return fmt.Errorf(result.Message)
+		return fmt.Errorf("%s", result.Message)
 	}
 
 	fmt.Printf("✅ [AI Feedback] 点赞成功: %s\n", result.Message)
@@ -555,7 +555,7 @@ func (a *App) QueryAIStreamWithQueue(question string) error {
 		errMsg := fmt.Sprintf("AI服务连接失败，请确保 FastAPI 服务运行在 %s", AI_SERVICE_URL)
 		fmt.Printf("❌ [AI Stream Queue] %s\n", errMsg)
 		runtime.EventsEmit(a.ctx, "ai-stream-error", errMsg)
-		return fmt.Errorf(errMsg)
+		return fmt.Errorf("%s", errMsg)
 	}
 	defer resp.Body.Close()
 
@@ -565,7 +565,7 @@ func (a *App) QueryAIStreamWithQueue(question string) error {
 		errMsg := fmt.Sprintf("AI服务返回错误 (状态码 %d): %s", resp.StatusCode, string(body))
 		fmt.Printf("❌ [AI Stream Queue] %s\n", errMsg)
 		runtime.EventsEmit(a.ctx, "ai-stream-error", errMsg)
-		return fmt.Errorf(errMsg)
+		return fmt.Errorf("%s", errMsg)
 	}
 
 	fmt.Printf("✅ [AI Stream Queue] 连接成功，开始接收流式数据...\n")
@@ -598,7 +598,7 @@ func (a *App) QueryAIStreamWithQueue(question string) error {
 			errMsg := fmt.Sprintf("读取流失败: %v", err)
 			fmt.Printf("❌ [AI Stream Queue] %s\n", errMsg)
 			runtime.EventsEmit(a.ctx, "ai-stream-error", errMsg)
-			return fmt.Errorf(errMsg)
+			return fmt.Errorf("%s", errMsg)
 		}
 
 		// 解析 SSE 格式: data: {...}

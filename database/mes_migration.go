@@ -13,28 +13,35 @@ func MigrateMESTables() error {
 
 	// CN: AutoMigrate 只追加列，不删除，安全幂等。
 	//     SysShiftSchedule 必须先于 SysShift（因为 SysShift.ScheduleID 是外键）。
-	//     SysDevice 追加 schedule_id 列（设备关联时间安排组，多对一）。
+	//     SysDevice 追加 schedule_id + cycle_time 列（设备关联时间安排组，并支持设备级 CT）。
 	// EN: AutoMigrate only adds columns, never drops. SysShiftSchedule must precede SysShift
-	//     (SysShift.ScheduleID FK). SysDevice gains schedule_id (many devices → one schedule).
+	//     (SysShift.ScheduleID FK). SysDevice gains schedule_id and cycle_time for per-device CT.
 	// JP: AutoMigrate は列追加のみ。SysShiftSchedule は外部キーのため SysShift より先に処理。
-	//     SysDevice には schedule_id 列（多対一でスケジュールに紐づく）を追加。
+	//     SysDevice には schedule_id と cycle_time を追加し、設備別 CT を扱う。
 	if err := DB.AutoMigrate(
-		&models.SysShiftSchedule{}, // 时间安排组（新增表，须在 SysShift 之前）
-		&models.SysShift{},         // 班次配置（追加 schedule_id 列）
-		&models.SysShiftBreak{},    // 班次内休息时间段
-		&models.SysDevice{},        // 设备表（追加 schedule_id 列）
-		&models.SysDeviceStatus{},  // 设备状态表
-		&models.SysTeam{},          // 班组表
-		&models.SysStaff{},         // 员工表
-		&models.SysStaffHistory{},  // 员工调动历史
-		&models.ProOrder{},         // 工单表
-		&models.ProProductionRun{}, // 生产运行记录
-		&models.ProMachineSession{},  // 设备登录/班次记录表
+		&models.SysShiftSchedule{},  // 时间安排组（新增表，须在 SysShift 之前）
+		&models.SysShift{},          // 班次配置（追加 schedule_id 列）
+		&models.SysShiftBreak{},     // 班次内休息时间段
+		&models.SysDevice{},         // 设备表（追加 schedule_id + cycle_time 列）
+		&models.SysDeviceStatus{},   // 设备状态表
+		&models.SysTeam{},           // 班组表
+		&models.SysStaff{},          // 员工表
+		&models.SysStaffHistory{},   // 员工调动历史
+		&models.ProOrder{},          // 工单表
+		&models.ProProductionRun{},  // 生产运行记录
+		&models.ProMachineSession{}, // 设备登录/班次记录表
 		&models.ProShiftSnapshot{},  // 班次生产快照（追溯用）
 		&models.Task{},              // 任务配置表
 		&models.TaskExecutionLog{},  // 任务执行日志表
 	); err != nil {
 		return fmt.Errorf("创建MES表结构失败: %w", err)
+	}
+
+	// CN: sys_variables 是采集主配置表，不在 MES AutoMigrate 模型中；这里单独补齐防抖/首帧快照列。
+	// EN: sys_variables is the acquisition master config and is not covered by MES AutoMigrate, so its debounce/snapshot columns are added separately.
+	// JP: sys_variables は収集系の主設定表で MES AutoMigrate 対象外のため、防振/初回スナップショット列を個別に補う。
+	if err := EnsureVariableAcquisitionConfigColumns(); err != nil {
+		return err
 	}
 
 	// 数据迁移：若无时间安排组，把已有班次归入一个默认组

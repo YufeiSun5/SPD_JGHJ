@@ -121,6 +121,16 @@ func (tm *TagManager) LoadTags(tags []*models.Tag) {
 			newTag.LastStrValue = oldTag.LastStrValue
 			newTag.LastUpdateTime = oldTag.LastUpdateTime
 			newTag.LastStoreTime = oldTag.LastStoreTime
+			newTag.IsFirstUpdate = oldTag.IsFirstUpdate
+			newTag.Quality = oldTag.Quality
+			newTag.LastQuality = oldTag.LastQuality
+			newTag.DebouncePending = oldTag.DebouncePending
+			newTag.DebounceValue = oldTag.DebounceValue
+			newTag.DebounceTime = oldTag.DebounceTime
+			newTag.DebounceQuality = oldTag.DebounceQuality
+			if newTag.DebounceLastValidValue == nil {
+				newTag.DebounceLastValidValue = oldTag.DebounceLastValidValue
+			}
 
 			// 🔧 保留报警状态 (重要: 防止报警丢失)
 			newTag.AlarmState = oldTag.AlarmState
