@@ -31,6 +31,7 @@ desktop/frontend/node_modules/
 AI/fastAPI/fastAPI/venv_offline/
 AI/fastAPI/fastAPI/venv/
 AI/fastAPI/fastAPI/whl_packages/
+AI/fastAPI/fastAPI/models/embedding_cache/
 AI/**/__pycache__/
 AI/**/*.pyc
 
