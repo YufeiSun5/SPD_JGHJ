@@ -30,6 +30,7 @@ desktop/frontend/node_modules/
 # ── Python AI 后端虚拟环境 ────────────────────────────────────
 AI/fastAPI/fastAPI/venv_offline/
 AI/fastAPI/fastAPI/venv/
+AI/fastAPI/fastAPI/whl_packages/
 AI/**/__pycache__/
 AI/**/*.pyc
 
