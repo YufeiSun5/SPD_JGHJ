@@ -675,6 +675,11 @@ func execIncrementProductionQty(params map[string]interface{}, triggerData map[s
 		return "", fmt.Errorf("增加产量失败: %w", err)
 	}
 
+	historyResult := ""
+	if shouldWriteManualHistoryPulse(params, triggerData, ngDelta) {
+		historyResult = writeManualHistoryPulse(triggerData, triggerTime)
+	}
+
 	if useChangeDelta && counterValueValid && newCounterValue > 0 {
 		productionCounterLastValue.Store(getProductionCounterKey(deviceID, triggerData), newCounterValue)
 	}
@@ -685,8 +690,51 @@ func execIncrementProductionQty(params map[string]interface{}, triggerData map[s
 		mode = "自动增量"
 	}
 	resultMsg := fmt.Sprintf("设备%d产量已更新 [%s]: +%d良品, +%d不良品（已同步到工单和班次）", deviceID, mode, okDelta, ngDelta)
+	if historyResult != "" {
+		resultMsg += "；" + historyResult
+	}
 	log.Printf("[EventProcessor] ✅ %s", resultMsg)
 	return resultMsg, nil
+}
+
+func shouldWriteManualHistoryPulse(params map[string]interface{}, triggerData map[string]interface{}, ngDelta int) bool {
+	if triggerData == nil {
+		return false
+	}
+	isManualButton := triggerData["trigger_source"] == "manual" && triggerData["trigger_type"] == "frontend_button"
+	if !isManualButton {
+		return false
+	}
+	if enabled := getBoolParam(params, triggerData, "write_manual_history", false); enabled {
+		return true
+	}
+
+	// CN: 兼容现有现场库配置，NG 手动按钮即使还没补 write_manual_history，也应按 trigger_var_id 记录历史脉冲。
+	// EN: Keep existing site DB configs working: manual NG tasks should backfill a history pulse by trigger_var_id even before write_manual_history is added.
+	// JP: 既存現場 DB 設定との互換性として、write_manual_history 未追加でも手動 NG タスクは trigger_var_id で履歴パルスを補完する。
+	return ngDelta != 0
+}
+
+func writeManualHistoryPulse(triggerData map[string]interface{}, triggerTime time.Time) string {
+	// CN: 前端 NG 按钮直接手动触发任务，绕过 MQTT 入库；工单更新成功后补一条 val=1 历史脉冲，保持报表口径一致。
+	// EN: Frontend NG buttons manually trigger tasks and bypass MQTT storage; after the order update succeeds, backfill one val=1 history pulse for reporting consistency.
+	// JP: フロントの NG ボタンは手動でタスクを起動し MQTT 保存を通らないため、工単更新成功後に val=1 の履歴パルスを補完し帳票口径を一致させる。
+	varID, ok := getTriggerIntValue(triggerData, "manual_trigger_var_id")
+	if !ok || varID <= 0 {
+		resultMsg := "手动历史脉冲未写入: 缺少有效 manual_trigger_var_id"
+		log.Printf("[EventProcessor] ⚠️ %s", resultMsg)
+		return resultMsg
+	}
+
+	if err := database.InsertHistoryData(int64(varID), 1, triggerTime); err != nil {
+		resultMsg := fmt.Sprintf("手动历史脉冲写入失败: var_id=%d, err=%v", varID, err)
+		log.Printf("[EventProcessor] ⚠️ %s", resultMsg)
+		return resultMsg
+	}
+
+	resultMsg := fmt.Sprintf("已补写手动历史脉冲: var_id=%d, val=1", varID)
+	log.Printf("[EventProcessor] ✅ %s", resultMsg)
+	return resultMsg
 }
 
 // correctProductionCounterDelta 修正累计计数器从 0 恢复到非零值时的假增量。
@@ -955,6 +1003,42 @@ func getStringParam(params map[string]interface{}, triggerData map[string]interf
 		if val, ok := triggerData[key]; ok {
 			if str, ok := val.(string); ok {
 				return str
+			}
+		}
+	}
+
+	return defaultValue
+}
+
+func getBoolParam(params map[string]interface{}, triggerData map[string]interface{}, key string, defaultValue bool) bool {
+	if val, ok := params[key]; ok {
+		switch v := val.(type) {
+		case bool:
+			return v
+		case string:
+			return v == "true" || v == "1"
+		case float64:
+			return v != 0
+		case int:
+			return v != 0
+		case int64:
+			return v != 0
+		}
+	}
+
+	if triggerData != nil {
+		if val, ok := triggerData[key]; ok {
+			switch v := val.(type) {
+			case bool:
+				return v
+			case string:
+				return v == "true" || v == "1"
+			case float64:
+				return v != 0
+			case int:
+				return v != 0
+			case int64:
+				return v != 0
 			}
 		}
 	}

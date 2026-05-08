@@ -643,6 +643,11 @@ func (ts *TaskScheduler) ManualTriggerTask(taskID int64, gatewayID int, triggerD
 		triggerData["trigger_source"] = "manual"
 		triggerData["trigger_type"] = "frontend_button"
 	}
+	// CN: 手动触发绕过 MQTT 采集层，这里把任务原始触发点位带给执行器，供需要补写历史脉冲的任务使用。
+	// EN: Manual triggers bypass MQTT acquisition, so pass the task's source variable to the executor for optional history pulse backfill.
+	// JP: 手動トリガーは MQTT 収集層を経由しないため、履歴パルス補完用にタスク元の変数を実行器へ渡す。
+	triggerData["manual_trigger_var_id"] = task.TriggerVarID
+	triggerData["manual_trigger_var_name"] = task.TriggerVarName
 
 	// 触发任务
 	ts.triggerTask(task, time.Now(), triggerData, gatewayID)
