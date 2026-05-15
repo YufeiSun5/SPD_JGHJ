@@ -11,6 +11,18 @@
 # - 当前目录整理: 根目录暴露的业务 Markdown 已收口到 docs，根目录暴露的 SQL 脚本已收口到 sql；AGENTS.md、MEMORY.md、README.md 继续保留在根目录。
 # - 当前文档状态: README 仍带有旧的 Gin API 项目表述，后续如继续整理文档，应优先按现有 Wails 桌面架构修正。
 #
+# ── Wails 绑定层薄壳化第一轮（2026-05-15）────────────────────────────────────
+# - 已创建 backend/service 后端 service 包，第一轮将一批原本写在 desktop/app.go 的业务逻辑抽出：
+#   ① runtime_service.go：实时点位 DTO、GetRealtimeData、GetAllTags、GetSystemMonitor；
+#   ② order_service.go：工单创建/更新/删除、StartProductionSmart 状态流转与开工编排；
+#   ③ history_variable_service.go：历史查询、变量配置 CRUD、批量更新/删除、配置版本热重载触发；
+#   ④ device_status_service.go：设备状态汇总、24h/筛选历史、班次人员拼接、状态统计；
+#   ⑤ alarm_task_service.go：报警列表/确认/统计、变量筛选项、任务 CRUD/手动触发、网关列表。
+# - desktop/app.go 中对应 Wails 方法已改为薄壳委托，前端方法名与签名保持不变；新增类型通过 type alias 继续兼容 Wails 绑定。
+# - 本轮未抽离 OEE/逻辑日班次窗口、班次配置保存、快照重建、AI stream 等高耦合路径；后续若继续薄壳化，应优先抽 Shift/OEE service，
+#   但必须保持 last_nonzero_val 防回跳、逻辑日 calendar_day_offset、快照排序等既有口径。
+# - 验证：go build ./...、go test ./... 通过。
+#
 # ── OEE 设备级 CT 口径统一（2026-04-18）────────────────────────────────────
 # - 甲方要求两台设备可设置不同 CT；OEE 计算链路已统一按设备读取 sys_devices.cycle_time。
 # - Wails 绑定 GetHourlyOEE 已改为无参接口：前端不再传 DeviceOEEConfig，后端统一从 DB 读取设备 schedule_id + cycle_time，

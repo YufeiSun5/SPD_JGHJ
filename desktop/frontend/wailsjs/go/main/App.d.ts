@@ -3,6 +3,7 @@
 import {main} from '../models';
 import {database} from '../models';
 import {models} from '../models';
+import {service} from '../models';
 import {time} from '../models';
 
 export function AckAlarm(arg1:number):Promise<void>;
@@ -61,7 +62,7 @@ export function GetActiveOrderQuality():Promise<Array<database.DeviceQualityStat
 
 export function GetActiveSession(arg1:number):Promise<models.ProMachineSession>;
 
-export function GetAlarmRecords(arg1:any,arg2:string,arg3:string,arg4:any):Promise<Array<main.AlarmRecordData>>;
+export function GetAlarmRecords(arg1:any,arg2:string,arg3:string,arg4:any):Promise<Array<service.AlarmRecordData>>;
 
 export function GetAlarmStats():Promise<Record<string, any>>;
 
@@ -71,11 +72,11 @@ export function GetAllDevices():Promise<Array<models.SysDevice>>;
 
 export function GetAllDevicesEnergyData():Promise<Array<main.DeviceEnergyData>>;
 
-export function GetAllDevicesStatus():Promise<Array<main.DeviceStatusData>>;
+export function GetAllDevicesStatus():Promise<Array<service.DeviceStatusData>>;
 
 export function GetAllErrorCodes():Promise<Array<database.ErrorCode>>;
 
-export function GetAllGateways():Promise<Array<main.Gateway>>;
+export function GetAllGateways():Promise<Array<service.Gateway>>;
 
 export function GetAllOrders():Promise<Array<models.ProOrder>>;
 
@@ -85,7 +86,7 @@ export function GetAllShiftsQualitySummary():Promise<Array<main.ShiftQualitySumm
 
 export function GetAllStaff(arg1:any,arg2:any):Promise<Array<models.SysStaff>>;
 
-export function GetAllTags():Promise<Array<main.TagInfo>>;
+export function GetAllTags():Promise<Array<service.TagInfo>>;
 
 export function GetAllTasks():Promise<Array<models.Task>>;
 
@@ -109,13 +110,13 @@ export function GetDeviceCycleTime(arg1:number):Promise<number>;
 
 export function GetDeviceStatusHistory(arg1:number):Promise<Array<models.SysDeviceStatus>>;
 
-export function GetDeviceStatusHistoryAll(arg1:any,arg2:string,arg3:string):Promise<Array<main.DeviceStatusHistoryData>>;
+export function GetDeviceStatusHistoryAll(arg1:any,arg2:string,arg3:string):Promise<Array<service.DeviceStatusHistoryData>>;
 
 export function GetDeviceStatusStats():Promise<Record<string, any>>;
 
 export function GetDeviceUtilizationTrend(arg1:any):Promise<Array<database.DeviceUtilizationTrend>>;
 
-export function GetHistoryData(arg1:number,arg2:string,arg3:string,arg4:number,arg5:number):Promise<main.HistoryDataResponse>;
+export function GetHistoryData(arg1:number,arg2:string,arg3:string,arg4:number,arg5:number):Promise<service.HistoryDataResponse>;
 
 export function GetHourlyOEE():Promise<Array<database.HourlyOEE>>;
 
@@ -133,7 +134,7 @@ export function GetMonthlyQualityByOrder():Promise<Array<database.DeviceQualityS
 
 export function GetRealHourlyProduction():Promise<Array<database.HourlyProductionPulse>>;
 
-export function GetRealtimeData():Promise<Array<main.TagData>>;
+export function GetRealtimeData():Promise<Array<service.TagData>>;
 
 export function GetScheduleDeviceIDs(arg1:number):Promise<Array<number>>;
 
@@ -161,11 +162,11 @@ export function GetSystemMonitor():Promise<Record<string, any>>;
 
 export function GetTodayEnergyConsumption(arg1:number):Promise<number>;
 
-export function GetTodayHourlyAlarmCount():Promise<Array<main.HourlyAlarmCount>>;
+export function GetTodayHourlyAlarmCount():Promise<Array<service.HourlyAlarmCount>>;
 
 export function GetTodayUnacknowledgedAlarmCount():Promise<number>;
 
-export function GetVariableOptions():Promise<Array<main.VariableOption>>;
+export function GetVariableOptions():Promise<Array<service.VariableOption>>;
 
 export function LikeAIAnswer(arg1:string,arg2:string,arg3:Array<main.RelevantDoc>):Promise<void>;
 

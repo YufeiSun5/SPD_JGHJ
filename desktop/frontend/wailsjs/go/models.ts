@@ -383,56 +383,6 @@ export namespace main {
 	        this.knowledge_id = source["knowledge_id"];
 	    }
 	}
-	export class AlarmRecordData {
-	    id: number;
-	    var_id: number;
-	    var_name: string;
-	    val: number;
-	    alarm_type: string;
-	    limit_value: number;
-	    msg: string;
-	    start_time: time.Time;
-	    end_time?: time.Time;
-	    ack_status: number;
-	    duration: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new AlarmRecordData(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.var_id = source["var_id"];
-	        this.var_name = source["var_name"];
-	        this.val = source["val"];
-	        this.alarm_type = source["alarm_type"];
-	        this.limit_value = source["limit_value"];
-	        this.msg = source["msg"];
-	        this.start_time = this.convertValues(source["start_time"], time.Time);
-	        this.end_time = this.convertValues(source["end_time"], time.Time);
-	        this.ack_status = source["ack_status"];
-	        this.duration = source["duration"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
 	export class BatchRegenerateResult {
 	    date: string;
 	    shift_id: number;
@@ -509,195 +459,6 @@ export namespace main {
 	        this.today_consumption = source["today_consumption"];
 	        this.power_unit = source["power_unit"];
 	        this.energy_unit = source["energy_unit"];
-	    }
-	}
-	export class DeviceStatusData {
-	    device_id: number;
-	    device_name: string;
-	    device_code: string;
-	    current_status: number;
-	    status_name: string;
-	    start_time?: time.Time;
-	    duration_min: number;
-	    running_min: number;
-	    idle_min: number;
-	    fault_min: number;
-	    utilization: number;
-	    operators: string;
-	    record_time: string;
-	    temperature: string;
-	    humidity: string;
-	    remark: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new DeviceStatusData(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.device_id = source["device_id"];
-	        this.device_name = source["device_name"];
-	        this.device_code = source["device_code"];
-	        this.current_status = source["current_status"];
-	        this.status_name = source["status_name"];
-	        this.start_time = this.convertValues(source["start_time"], time.Time);
-	        this.duration_min = source["duration_min"];
-	        this.running_min = source["running_min"];
-	        this.idle_min = source["idle_min"];
-	        this.fault_min = source["fault_min"];
-	        this.utilization = source["utilization"];
-	        this.operators = source["operators"];
-	        this.record_time = source["record_time"];
-	        this.temperature = source["temperature"];
-	        this.humidity = source["humidity"];
-	        this.remark = source["remark"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class DeviceStatusHistoryData {
-	    id: number;
-	    device_id: number;
-	    status: number;
-	    start_time: time.Time;
-	    end_time?: time.Time;
-	    duration_min: number;
-	    extra_data?: string;
-	    remark?: string;
-	    device?: models.SysDevice;
-	    team_name: string;
-	    operators: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new DeviceStatusHistoryData(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.device_id = source["device_id"];
-	        this.status = source["status"];
-	        this.start_time = this.convertValues(source["start_time"], time.Time);
-	        this.end_time = this.convertValues(source["end_time"], time.Time);
-	        this.duration_min = source["duration_min"];
-	        this.extra_data = source["extra_data"];
-	        this.remark = source["remark"];
-	        this.device = this.convertValues(source["device"], models.SysDevice);
-	        this.team_name = source["team_name"];
-	        this.operators = source["operators"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class Gateway {
-	    id: number;
-	    gw_name: string;
-	    status: number;
-	
-	    static createFrom(source: any = {}) {
-	        return new Gateway(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.gw_name = source["gw_name"];
-	        this.status = source["status"];
-	    }
-	}
-	export class HistoryRecord {
-	    timestamp: string;
-	    value: any;
-	
-	    static createFrom(source: any = {}) {
-	        return new HistoryRecord(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.timestamp = source["timestamp"];
-	        this.value = source["value"];
-	    }
-	}
-	export class HistoryDataResponse {
-	    records: HistoryRecord[];
-	    total: number;
-	
-	    static createFrom(source: any = {}) {
-	        return new HistoryDataResponse(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.records = this.convertValues(source["records"], HistoryRecord);
-	        this.total = source["total"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	
-	export class HourlyAlarmCount {
-	    hour: number;
-	    alarm_count: number;
-	    time_slot: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new HourlyAlarmCount(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.hour = source["hour"];
-	        this.alarm_count = source["alarm_count"];
-	        this.time_slot = source["time_slot"];
 	    }
 	}
 	export class KnowledgeItem {
@@ -1022,50 +783,6 @@ export namespace main {
 		    return a;
 		}
 	}
-	export class TagData {
-	    var_name: string;
-	    display_name: string;
-	    data_type: string;
-	    value: string;
-	    unit: string;
-	    alarm_state: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new TagData(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.var_name = source["var_name"];
-	        this.display_name = source["display_name"];
-	        this.data_type = source["data_type"];
-	        this.value = source["value"];
-	        this.unit = source["unit"];
-	        this.alarm_state = source["alarm_state"];
-	    }
-	}
-	export class TagInfo {
-	    var_id: number;
-	    var_name: string;
-	    display_name: string;
-	    unit: string;
-	    store_mode: number;
-	    data_type: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new TagInfo(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.var_id = source["var_id"];
-	        this.var_name = source["var_name"];
-	        this.display_name = source["display_name"];
-	        this.unit = source["unit"];
-	        this.store_mode = source["store_mode"];
-	        this.data_type = source["data_type"];
-	    }
-	}
 	export class UserConfig {
 	    production_coefficient: number;
 	    daily_work_minutes: number;
@@ -1099,26 +816,6 @@ export namespace main {
 		    }
 		    return a;
 		}
-	}
-	export class VariableOption {
-	    var_id: number;
-	    var_name: string;
-	    display_name: string;
-	    device_name: string;
-	    gateway_name: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new VariableOption(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.var_id = source["var_id"];
-	        this.var_name = source["var_name"];
-	        this.display_name = source["display_name"];
-	        this.device_name = source["device_name"];
-	        this.gateway_name = source["gateway_name"];
-	    }
 	}
 
 }
@@ -1674,6 +1371,314 @@ export namespace models {
 		    }
 		    return a;
 		}
+	}
+
+}
+
+export namespace service {
+	
+	export class AlarmRecordData {
+	    id: number;
+	    var_id: number;
+	    var_name: string;
+	    val: number;
+	    alarm_type: string;
+	    limit_value: number;
+	    msg: string;
+	    start_time: time.Time;
+	    end_time?: time.Time;
+	    ack_status: number;
+	    duration: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AlarmRecordData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.var_id = source["var_id"];
+	        this.var_name = source["var_name"];
+	        this.val = source["val"];
+	        this.alarm_type = source["alarm_type"];
+	        this.limit_value = source["limit_value"];
+	        this.msg = source["msg"];
+	        this.start_time = this.convertValues(source["start_time"], time.Time);
+	        this.end_time = this.convertValues(source["end_time"], time.Time);
+	        this.ack_status = source["ack_status"];
+	        this.duration = source["duration"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class DeviceStatusData {
+	    device_id: number;
+	    device_name: string;
+	    device_code: string;
+	    current_status: number;
+	    status_name: string;
+	    start_time?: time.Time;
+	    duration_min: number;
+	    running_min: number;
+	    idle_min: number;
+	    fault_min: number;
+	    utilization: number;
+	    operators: string;
+	    record_time: string;
+	    temperature: string;
+	    humidity: string;
+	    remark: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DeviceStatusData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.device_id = source["device_id"];
+	        this.device_name = source["device_name"];
+	        this.device_code = source["device_code"];
+	        this.current_status = source["current_status"];
+	        this.status_name = source["status_name"];
+	        this.start_time = this.convertValues(source["start_time"], time.Time);
+	        this.duration_min = source["duration_min"];
+	        this.running_min = source["running_min"];
+	        this.idle_min = source["idle_min"];
+	        this.fault_min = source["fault_min"];
+	        this.utilization = source["utilization"];
+	        this.operators = source["operators"];
+	        this.record_time = source["record_time"];
+	        this.temperature = source["temperature"];
+	        this.humidity = source["humidity"];
+	        this.remark = source["remark"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class DeviceStatusHistoryData {
+	    id: number;
+	    device_id: number;
+	    status: number;
+	    start_time: time.Time;
+	    end_time?: time.Time;
+	    duration_min: number;
+	    extra_data?: string;
+	    remark?: string;
+	    device?: models.SysDevice;
+	    team_name: string;
+	    operators: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DeviceStatusHistoryData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.device_id = source["device_id"];
+	        this.status = source["status"];
+	        this.start_time = this.convertValues(source["start_time"], time.Time);
+	        this.end_time = this.convertValues(source["end_time"], time.Time);
+	        this.duration_min = source["duration_min"];
+	        this.extra_data = source["extra_data"];
+	        this.remark = source["remark"];
+	        this.device = this.convertValues(source["device"], models.SysDevice);
+	        this.team_name = source["team_name"];
+	        this.operators = source["operators"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Gateway {
+	    id: number;
+	    gw_name: string;
+	    status: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Gateway(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.gw_name = source["gw_name"];
+	        this.status = source["status"];
+	    }
+	}
+	export class HistoryRecord {
+	    timestamp: string;
+	    value: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new HistoryRecord(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.timestamp = source["timestamp"];
+	        this.value = source["value"];
+	    }
+	}
+	export class HistoryDataResponse {
+	    records: HistoryRecord[];
+	    total: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new HistoryDataResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.records = this.convertValues(source["records"], HistoryRecord);
+	        this.total = source["total"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class HourlyAlarmCount {
+	    hour: number;
+	    alarm_count: number;
+	    time_slot: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new HourlyAlarmCount(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hour = source["hour"];
+	        this.alarm_count = source["alarm_count"];
+	        this.time_slot = source["time_slot"];
+	    }
+	}
+	export class TagData {
+	    var_name: string;
+	    display_name: string;
+	    data_type: string;
+	    value: string;
+	    unit: string;
+	    alarm_state: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TagData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.var_name = source["var_name"];
+	        this.display_name = source["display_name"];
+	        this.data_type = source["data_type"];
+	        this.value = source["value"];
+	        this.unit = source["unit"];
+	        this.alarm_state = source["alarm_state"];
+	    }
+	}
+	export class TagInfo {
+	    var_id: number;
+	    var_name: string;
+	    display_name: string;
+	    unit: string;
+	    store_mode: number;
+	    data_type: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TagInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.var_id = source["var_id"];
+	        this.var_name = source["var_name"];
+	        this.display_name = source["display_name"];
+	        this.unit = source["unit"];
+	        this.store_mode = source["store_mode"];
+	        this.data_type = source["data_type"];
+	    }
+	}
+	export class VariableOption {
+	    var_id: number;
+	    var_name: string;
+	    display_name: string;
+	    device_name: string;
+	    gateway_name: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new VariableOption(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.var_id = source["var_id"];
+	        this.var_name = source["var_name"];
+	        this.display_name = source["display_name"];
+	        this.device_name = source["device_name"];
+	        this.gateway_name = source["gateway_name"];
+	    }
 	}
 
 }
