@@ -790,8 +790,8 @@ const pastShiftsProdSummary = computed(() => {
 const getQualityClass = (rate) => {
   if (!rate || rate === '-') return 'normal'
   const value = parseFloat(rate)
-  if (value >= 90) return 'excellent'  // 大于等于90%显示绿色
-  return 'normal'  // 低于90%显示红色
+  if (value >= 95) return 'excellent'  // 大于等于95%显示绿色
+  return 'normal'  // 低于95%显示红色
 }
 
 const getDeviceStatusClass = (device) => {
@@ -1610,8 +1610,8 @@ const initProductionChart = () => {
     },
     xAxis: {
       type: 'value',
-      min: hourValues[0],
-      max: hourValues[hourValues.length - 1] + 1,
+      min: hourValues[0] - 0.5,
+      max: hourValues[hourValues.length - 1] + 1.5,
       interval: (() => { const span = hourValues.length; return span > 16 ? 3 : span > 10 ? 2 : 1 })(),
       splitLine: { show: false },
       axisTick: { show: false },
@@ -2474,12 +2474,12 @@ onUnmounted(() => {
 }
 
 .plan-table td.excellent {
-  color: #00ff88;  /* 绿色：合格率 >= 90% */
+  color: #00ff88;  /* 绿色：合格率 >= 95% */
   font-weight: bold;
 }
 
 .plan-table td.normal {
-  color: #ff6666;  /* 红色：合格率 < 90% */
+  color: #ff6666;  /* 红色：合格率 < 95% */
 }
 
 /* 今日产量 */

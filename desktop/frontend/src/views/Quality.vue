@@ -179,7 +179,7 @@
                 </span>
               </td>
               <td>
-                <span :class="['efficiency-badge', getEfficiencyClass(order.efficiency)]">
+                <span class="efficiency-badge">
                   {{ order.efficiency }}%
                 </span>
               </td>
@@ -530,9 +530,7 @@ const getStatusIcon = (status) => {
 // 获取良品率样式类
 const getQualityClass = (rate) => {
   if (rate >= 95) return 'excellent'
-  if (rate >= 90) return 'good'
-  if (rate >= 80) return 'normal'
-  return 'poor'
+  return 'normal'
 }
 
 // 获取效率样式类
@@ -1293,30 +1291,11 @@ onMounted(async () => {
   border-radius: 12px;
   font-size: 12px;
   font-weight: 600;
+  color: #fff;
 }
 
 .quality-badge.excellent {
-  background: rgba(46, 204, 113, 0.2);
   color: #2ecc71;
-  border: 1px solid #2ecc71;
-}
-
-.quality-badge.good {
-  background: rgba(52, 152, 219, 0.2);
-  color: #3498db;
-  border: 1px solid #3498db;
-}
-
-.quality-badge.normal {
-  background: rgba(243, 156, 18, 0.2);
-  color: #f39c12;
-  border: 1px solid #f39c12;
-}
-
-.quality-badge.poor {
-  background: rgba(231, 76, 60, 0.2);
-  color: #e74c3c;
-  border: 1px solid #e74c3c;
 }
 
 /* 效率徽章 */
@@ -1326,30 +1305,7 @@ onMounted(async () => {
   border-radius: 12px;
   font-size: 12px;
   font-weight: 600;
-}
-
-.efficiency-badge.excellent {
-  background: rgba(46, 204, 113, 0.2);
-  color: #2ecc71;
-  border: 1px solid #2ecc71;
-}
-
-.efficiency-badge.good {
-  background: rgba(52, 152, 219, 0.2);
-  color: #3498db;
-  border: 1px solid #3498db;
-}
-
-.efficiency-badge.normal {
-  background: rgba(243, 156, 18, 0.2);
-  color: #f39c12;
-  border: 1px solid #f39c12;
-}
-
-.efficiency-badge.poor {
-  background: rgba(231, 76, 60, 0.2);
-  color: #e74c3c;
-  border: 1px solid #e74c3c;
+  color: #fff;
 }
 
 /* 状态徽章 */
