@@ -23,6 +23,30 @@
 #   但必须保持 last_nonzero_val 防回跳、逻辑日 calendar_day_offset、快照排序等既有口径。
 # - 验证：go build ./...、go test ./... 通过。
 #
+# ── Wails 班次绑定薄壳化（2026-05-15）──────────────────────────────────────
+# - 新增 backend/service/shift_service.go，承接原 desktop/app_shifts.go 中的班次重业务：
+#   ① ShiftBreak / ShiftConfig / ShiftScheduleConfig / LogicalDayShift DTO；
+#   ② 时间安排组/班次/休息段 upsert、级联删除、孤立脏数据清理；
+#   ③ 设备 schedule_id 绑定、设备 cycle_time 读写；
+#   ④ 当前班次、逻辑日班次、默认班次窗口计算。
+# - desktop/app_shifts.go 已改为 Wails 薄壳：只保留类型别名和 App 方法委托，前端方法名保持不变。
+# - desktop/app_snapshot.go 中原 modelToShiftConfig 调用改为 service.ModelToShiftConfig，避免快照继续依赖 Wails 文件里的转换 helper。
+# - 保持既有逻辑日规则：sort_order 最小活动班次作为逻辑日边界；开始时间早于边界的班次使用 CalendarDayOffset=1。
+# - 验证：go test ./...、go build ./...、desktop/frontend npm run build、desktop wails build -skipbindings 通过。
+#   完整 wails build 的绑定生成阶段因已有桌面实例占用 127.0.0.1:47391 被单实例保护拦截，非本次代码编译错误。
+#
+# ── Wails 非核心薄壳化第二轮（2026-05-15）──────────────────────────────────
+# - 新增并迁移一批明显不该留在 Wails 壳里的低/中风险业务：
+#   ① error_code_service.go：错误码同步与查询；
+#   ② statistics_service.go：基础统计透传、逻辑日小时产量、月度产量/质量；
+#   ③ staff_session_service.go：设备列表、员工/班组 CRUD、人员调动、设备上下岗、session 查询；
+#   ④ system_config_service.go：用户目录 user_config.json 的系统配置、每日工时、休息时间读写；
+#   ⑤ energy_service.go：日电能差值计算、设备实时功率/日电能汇总。
+# - desktop/app.go 对应 Wails 方法改为委托 service，方法名和前端调用保持不变；Startup、main 初始化、Wails runtime 事件桥仍留在 desktop。
+# - OEE 与班次快照仍暂留 desktop：这两块互相依赖逻辑日窗口、设备 CT、last_nonzero_val 和快照排序，后续应作为独立高风险步骤迁移。
+# - 验证：go test ./...、go build ./...、desktop/frontend npm run build、desktop wails build -skipbindings 通过。
+#   完整 wails build 仍因已有桌面实例占用 127.0.0.1:47391 被单实例保护拦截，非本次代码编译错误。
+#
 # ── OEE 设备级 CT 口径统一（2026-04-18）────────────────────────────────────
 # - 甲方要求两台设备可设置不同 CT；OEE 计算链路已统一按设备读取 sys_devices.cycle_time。
 # - Wails 绑定 GetHourlyOEE 已改为无参接口：前端不再传 DeviceOEEConfig，后端统一从 DB 读取设备 schedule_id + cycle_time，

@@ -26,6 +26,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"gin-mqtt-pgsql/backend/service"
 	"gin-mqtt-pgsql/database"
 	"gin-mqtt-pgsql/models"
 )
@@ -688,7 +689,7 @@ func (a *App) RegenerateShiftSnapshot(dateStr string, shiftID, deviceID int) err
 	if err := database.DB.Preload("Breaks").First(&shiftModel, shiftID).Error; err != nil {
 		return fmt.Errorf("班次(id=%d)不存在: %w", shiftID, err)
 	}
-	sc := modelToShiftConfig(shiftModel)
+	sc := service.ModelToShiftConfig(shiftModel)
 
 	// 查设备
 	var dev models.SysDevice
@@ -779,7 +780,7 @@ func (a *App) BatchRegenerateShiftSnapshots(dates []string, shiftIDs []int, devi
 			if len(shiftFilter) > 0 && !shiftFilter[shiftModel.ID] {
 				continue
 			}
-			sc := modelToShiftConfig(shiftModel)
+			sc := service.ModelToShiftConfig(shiftModel)
 			shiftStart, shiftEnd := resolveShiftDatetime(sc, baseDate)
 
 			for _, dev := range allDevices {

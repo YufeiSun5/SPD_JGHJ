@@ -2,11 +2,8 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math"
-	"os"
-	"path/filepath"
 	"time"
 
 	"gin-mqtt-pgsql/backend/service"
@@ -36,53 +33,12 @@ func (a *App) Startup(ctx context.Context) {
 
 // SyncErrorCode 同步错误码到MySQL
 func (a *App) SyncErrorCode(errorCode int, errorMsg string) error {
-	if database.DB == nil {
-		return fmt.Errorf("database not initialized")
-	}
-
-	var existingCode database.ErrorCode
-	result := database.DB.Where("error_code = ?", errorCode).First(&existingCode)
-
-	now := time.Now()
-
-	if result.Error == nil {
-		// 错误码已存在，更新
-		existingCode.ErrorMsg = errorMsg
-		existingCode.UpdatedAt = now
-		if err := database.DB.Save(&existingCode).Error; err != nil {
-			return fmt.Errorf("更新错误码失败: %v", err)
-		}
-		fmt.Printf("✅ [错误码同步] 更新错误码 %d\n", errorCode)
-	} else {
-		// 错误码不存在，插入
-		newCode := database.ErrorCode{
-			ErrorCode: errorCode,
-			ErrorMsg:  errorMsg,
-			CreatedAt: now,
-			UpdatedAt: now,
-		}
-		if err := database.DB.Create(&newCode).Error; err != nil {
-			return fmt.Errorf("创建错误码失败: %v", err)
-		}
-		fmt.Printf("✅ [错误码同步] 创建错误码 %d\n", errorCode)
-	}
-
-	return nil
+	return service.SyncErrorCode(errorCode, errorMsg)
 }
 
 // GetAllErrorCodes 获取所有错误码
 func (a *App) GetAllErrorCodes() ([]*database.ErrorCode, error) {
-	if database.DB == nil {
-		return nil, fmt.Errorf("database not initialized")
-	}
-
-	var errorCodes []*database.ErrorCode
-	result := database.DB.Order("error_code ASC").Find(&errorCodes)
-	if result.Error != nil {
-		return nil, fmt.Errorf("查询错误码失败: %v", result.Error)
-	}
-
-	return errorCodes, nil
+	return service.GetAllErrorCodes()
 }
 
 // GetRealtimeData 获取所有测点实时数据 (线程安全)
@@ -134,8 +90,7 @@ func (a *App) StartProductionSmart(orderID int64) (*models.ProProductionRun, err
 
 // GetRealHourlyProduction 获取真实的每小时产量统计（调用数据访问层）
 func (a *App) GetRealHourlyProduction() ([]database.HourlyProductionPulse, error) {
-	// ⭐ 调用数据访问层方法
-	return database.GetHourlyProductionPulse(nil)
+	return service.GetRealHourlyProduction()
 }
 
 // GetHourlyProductionAccurate 获取每小时精确产量统计（完全参数化，无硬编码）
@@ -146,37 +101,32 @@ func (a *App) GetRealHourlyProduction() ([]database.HourlyProductionPulse, error
 // EN: Automatically resolves the logical date from shift config; before first-shift start = yesterday.
 // JP: シフト設定から論理日付を自動解決。第1シフト開始前は前日のデータを返す。
 func (a *App) GetHourlyProductionAccurate(configs []database.DeviceVarConfig) ([]database.HourlyProductionAccurate, error) {
-	ldShifts, err := a.GetShiftsForLogicalDay()
-	logicalDate := ""
-	if err == nil && len(ldShifts) > 0 {
-		logicalDate = ldShifts[0].LogicalDate
-	}
-	return database.GetHourlyProductionAccurate(configs, logicalDate)
+	return service.GetHourlyProductionAccurate(configs)
 }
 
 // GetMonthlyProductionAccurate 获取当月产量汇总统计（按设备，不走工单表）
 func (a *App) GetMonthlyProductionAccurate(configs []database.DeviceVarConfig) ([]database.MonthlyProductionAccurate, error) {
-	return database.GetMonthlyProductionAccurate(configs)
+	return service.GetMonthlyProductionAccurate(configs)
 }
 
 // GetMonthlyQualityByOrder 从工单表获取当月各设备良品率汇总
 func (a *App) GetMonthlyQualityByOrder() ([]database.DeviceQualityStat, error) {
-	return database.GetMonthlyQualityByOrder()
+	return service.GetMonthlyQualityByOrder()
 }
 
 // GetMonthlyDailyQualityTrend 获取本月每日良品率趋势
 func (a *App) GetMonthlyDailyQualityTrend() ([]database.DailyQualityTrend, error) {
-	return database.GetMonthlyDailyQualityTrend()
+	return service.GetMonthlyDailyQualityTrend()
 }
 
 // GetDailyQualityByRun 从生产运行记录获取今日各设备良品率
 func (a *App) GetDailyQualityByRun() ([]database.DeviceQualityStat, error) {
-	return database.GetDailyQualityByRun()
+	return service.GetDailyQualityByRun()
 }
 
 // GetActiveOrderQuality 获取当前在产工单（生产中+暂停）各设备良品率
 func (a *App) GetActiveOrderQuality() ([]database.DeviceQualityStat, error) {
-	return database.GetActiveOrderQuality()
+	return service.GetActiveOrderQuality()
 }
 
 // ========================================================
@@ -185,11 +135,7 @@ func (a *App) GetActiveOrderQuality() ([]database.DeviceQualityStat, error) {
 
 // GetAllDevices 获取所有设备
 func (a *App) GetAllDevices() ([]*models.SysDevice, error) {
-	devices, err := database.GetAllDevices()
-	if err != nil {
-		return nil, err
-	}
-	return devices, nil
+	return service.GetAllDevices()
 }
 
 // ========================================================
@@ -198,72 +144,33 @@ func (a *App) GetAllDevices() ([]*models.SysDevice, error) {
 
 // GetAllStaff 获取所有员工
 func (a *App) GetAllStaff(teamID *int, isActive *int8) ([]*models.SysStaff, error) {
-	staffList, err := database.GetAllStaff(teamID, isActive)
-	if err != nil {
-		return nil, err
-	}
-	return staffList, nil
+	return service.GetAllStaff(teamID, isActive)
 }
 
 // CreateStaff 创建员工
 func (a *App) CreateStaff(staffCode, name string, currentTeamID *int) (*models.SysStaff, error) {
-	staff := &models.SysStaff{
-		StaffCode:     staffCode,
-		Name:          name,
-		CurrentTeamID: currentTeamID,
-		IsActive:      1, // 默认在职
-	}
-
-	if err := database.CreateStaff(staff); err != nil {
-		return nil, err
-	}
-
-	// 重新加载包含班组信息
-	staff, _ = database.GetStaffByID(staff.ID)
-	return staff, nil
+	return service.CreateStaff(staffCode, name, currentTeamID)
 }
 
 // UpdateStaff 更新员工
 // 特殊值：currentTeamID = -1 表示清空班组（设为 NULL）
 func (a *App) UpdateStaff(id int, name *string, currentTeamID *int, isActive *int8) error {
-	updates := make(map[string]interface{})
-
-	if name != nil {
-		updates["name"] = *name
-	}
-	if currentTeamID != nil {
-		if *currentTeamID == -1 {
-			// -1 表示清空班组
-			updates["current_team_id"] = nil
-		} else {
-			updates["current_team_id"] = *currentTeamID
-		}
-	}
-	if isActive != nil {
-		updates["is_active"] = *isActive
-	}
-
-	return database.UpdateStaff(id, updates)
+	return service.UpdateStaff(id, name, currentTeamID, isActive)
 }
 
 // DeleteStaff 删除员工
 func (a *App) DeleteStaff(id int) error {
-	return database.DeleteStaff(id)
+	return service.DeleteStaff(id)
 }
 
 // TransferStaff 调动员工到新班组
 func (a *App) TransferStaff(staffID, newTeamID int, operatorName *string) error {
-	req := &models.TransferStaffRequest{
-		StaffID:      staffID,
-		NewTeamID:    newTeamID,
-		OperatorName: operatorName,
-	}
-	return database.TransferStaff(req)
+	return service.TransferStaff(staffID, newTeamID, operatorName)
 }
 
 // GetStaffHistory 获取员工调动历史
 func (a *App) GetStaffHistory(staffID int) ([]*models.SysStaffHistory, error) {
-	return database.GetStaffHistory(staffID)
+	return service.GetStaffHistory(staffID)
 }
 
 // ========================================================
@@ -272,48 +179,22 @@ func (a *App) GetStaffHistory(staffID int) ([]*models.SysStaffHistory, error) {
 
 // GetAllTeams 获取所有班组
 func (a *App) GetAllTeams(status *int8) ([]*models.SysTeam, error) {
-	teams, err := database.GetAllTeams(status)
-	if err != nil {
-		return nil, err
-	}
-	return teams, nil
+	return service.GetAllTeams(status)
 }
 
 // CreateTeam 创建班组
 func (a *App) CreateTeam(teamName string, leaderName *string) (*models.SysTeam, error) {
-	team := &models.SysTeam{
-		TeamName:   teamName,
-		LeaderName: leaderName,
-		Status:     1, // 默认启用
-	}
-
-	if err := database.CreateTeam(team); err != nil {
-		return nil, err
-	}
-
-	return team, nil
+	return service.CreateTeam(teamName, leaderName)
 }
 
 // UpdateTeam 更新班组
 func (a *App) UpdateTeam(id int, teamName *string, leaderName *string, status *int8) error {
-	updates := make(map[string]interface{})
-
-	if teamName != nil {
-		updates["team_name"] = *teamName
-	}
-	if leaderName != nil {
-		updates["leader_name"] = *leaderName
-	}
-	if status != nil {
-		updates["status"] = *status
-	}
-
-	return database.UpdateTeam(id, updates)
+	return service.UpdateTeam(id, teamName, leaderName, status)
 }
 
 // DeleteTeam 删除班组
 func (a *App) DeleteTeam(id int) error {
-	return database.DeleteTeam(id)
+	return service.DeleteTeam(id)
 }
 
 // ========================================================
@@ -322,113 +203,37 @@ func (a *App) DeleteTeam(id int) error {
 
 // DeviceLogin 设备登录/上班打卡
 func (a *App) DeviceLogin(deviceID, teamID int, staffIDs []int) (*models.ProMachineSession, error) {
-	fmt.Printf("🔐 DeviceLogin 被调用: deviceID=%d, teamID=%d, staffIDs=%v\n", deviceID, teamID, staffIDs)
-
-	// 序列化员工ID列表
-	staffIDsJSON, err := json.Marshal(staffIDs)
-	if err != nil {
-		fmt.Printf("❌ 序列化员工列表失败: %v\n", err)
-		return nil, fmt.Errorf("序列化员工列表失败: %v", err)
-	}
-
-	session := &models.ProMachineSession{
-		DeviceID: deviceID,
-		TeamID:   teamID,
-		StaffIDs: string(staffIDsJSON),
-	}
-
-	fmt.Printf("📝 准备写入班次记录: %+v\n", session)
-
-	if err := database.DeviceLogin(session); err != nil {
-		fmt.Printf("❌ DeviceLogin 失败: %v\n", err)
-		return nil, err
-	}
-
-	fmt.Printf("✅ 班次记录创建成功，ID: %d\n", session.ID)
-
-	// 返回包含班组信息的记录
-	result, err := database.GetSessionByID(session.ID)
-	if err != nil {
-		fmt.Printf("❌ 获取班次详情失败: %v\n", err)
-		return nil, err
-	}
-
-	fmt.Printf("✅ 返回班次信息: %+v\n", result)
-	return result, nil
+	return service.DeviceLogin(deviceID, teamID, staffIDs)
 }
 
 // DeviceLogout 设备登出/下班打卡
 func (a *App) DeviceLogout(deviceID int) (*models.ProMachineSession, error) {
-	return database.DeviceLogout(deviceID)
+	return service.DeviceLogout(deviceID)
 }
 
 // GetActiveSession 获取设备当前活动班次
 func (a *App) GetActiveSession(deviceID int) (*models.ProMachineSession, error) {
-	return database.GetActiveSession(deviceID)
+	return service.GetActiveSession(deviceID)
 }
 
 // GetAllActiveSessions 获取所有设备的活动班次
 func (a *App) GetAllActiveSessions() ([]*models.ProMachineSession, error) {
-	var sessions []*models.ProMachineSession
-	err := database.DB.Preload("Team").
-		Where("logout_time IS NULL").
-		Order("device_id").
-		Find(&sessions).Error
-
-	if err != nil {
-		return nil, fmt.Errorf("查询活动班次失败: %v", err)
-	}
-
-	return sessions, nil
+	return service.GetAllActiveSessions()
 }
 
 // GetSessionHistory 获取班次历史记录
 func (a *App) GetSessionHistory(deviceID *int, teamID *int, startDate, endDate string) ([]*models.ProMachineSession, error) {
-	var start, end *time.Time
-
-	if startDate != "" {
-		t, err := time.ParseInLocation("2006-01-02", startDate, time.Local)
-		if err == nil {
-			start = &t
-		}
-	}
-
-	if endDate != "" {
-		t, err := time.ParseInLocation("2006-01-02", endDate, time.Local)
-		if err == nil {
-			endTime := t.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
-			end = &endTime
-		}
-	}
-
-	return database.GetSessionHistory(deviceID, teamID, start, end)
+	return service.GetSessionHistory(deviceID, teamID, startDate, endDate)
 }
 
 // GetSessionStats 获取班次统计信息
 func (a *App) GetSessionStats(sessionID int64) (*models.SessionStatusResponse, error) {
-	return database.GetSessionStats(sessionID)
+	return service.GetSessionStats(sessionID)
 }
 
 // GetStaffAttendance 获取员工出勤记录
 func (a *App) GetStaffAttendance(staffID int, startDate, endDate string) ([]*models.ProMachineSession, error) {
-	var start, end *time.Time
-
-	if startDate != "" {
-		t, err := time.ParseInLocation("2006-01-02", startDate, time.Local)
-		if err == nil {
-			start = &t
-		}
-	}
-
-	if endDate != "" {
-		t, err := time.ParseInLocation("2006-01-02", endDate, time.Local)
-		if err == nil {
-			endTime := t.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
-			end = &endTime
-		}
-	}
-
-	return database.GetStaffAttendance(staffID, start, end)
+	return service.GetStaffAttendance(staffID, startDate, endDate)
 }
 
 // ========================================================
@@ -527,17 +332,17 @@ func (a *App) GetDeviceStatusStats() (map[string]interface{}, error) {
 
 // GetHourlyProduction 获取今日按小时统计的产量
 func (a *App) GetHourlyProduction(deviceID *int) ([]database.HourlyProduction, error) {
-	return database.GetHourlyProduction(deviceID)
+	return service.GetHourlyProduction(deviceID)
 }
 
 // GetStaffEfficiency 获取员工绩效统计
 func (a *App) GetStaffEfficiency(startTime, endTime *time.Time) ([]database.StaffEfficiency, error) {
-	return database.GetStaffEfficiency(startTime, endTime)
+	return service.GetStaffEfficiency(startTime, endTime)
 }
 
 // GetDeviceUtilizationTrend 获取设备利用率趋势
 func (a *App) GetDeviceUtilizationTrend(deviceID *int) ([]database.DeviceUtilizationTrend, error) {
-	return database.GetDeviceUtilizationTrend(deviceID)
+	return service.GetDeviceUtilizationTrend(deviceID)
 }
 
 // ========================================================
@@ -789,16 +594,8 @@ func (s *oeeDeviceConfigSet) configsForSchedule(scheduleID int) []database.Devic
 }
 
 func (a *App) getGlobalCycleTimeFallback() float64 {
-	configPath, err := a.getConfigFilePath()
-	if err != nil {
-		return 100.0
-	}
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return 100.0
-	}
-	var config UserConfig
-	if err := json.Unmarshal(data, &config); err != nil || config.ProductionCoefficient <= 0 {
+	config, err := service.GetSystemConfig()
+	if err != nil || config == nil || config.ProductionCoefficient <= 0 {
 		return 100.0
 	}
 	return config.ProductionCoefficient
@@ -877,7 +674,7 @@ func (a *App) getOEEConfigs() ([]database.DeviceOEEConfig, []database.BreakTimeC
 	breakTimes, err := a.GetBreakTimes()
 	if err != nil {
 		fmt.Printf("⚠️ 读取休息时间配置失败，使用默认配置: %v\n", err)
-		breakTimes = getDefaultBreakTimes()
+		breakTimes = service.DefaultBreakTimes()
 	}
 	dbBreakTimes := make([]database.BreakTimeConfig, len(breakTimes))
 	for i, bt := range breakTimes {
@@ -1448,285 +1245,37 @@ func (a *App) GetAllGateways() ([]Gateway, error) {
 // 理论节拍配置管理接口
 // ========================================================
 
-// UserConfig 用户配置结构
-// BreakTime 休息时间段
-type BreakTime struct {
-	ID        int    `json:"id"`         // 唯一标识
-	Name      string `json:"name"`       // 名称（如"上午茶歇"）
-	StartHour int    `json:"start_hour"` // 开始小时
-	StartMin  int    `json:"start_min"`  // 开始分钟
-	EndHour   int    `json:"end_hour"`   // 结束小时
-	EndMin    int    `json:"end_min"`    // 结束分钟
-}
-
-type UserConfig struct {
-	ProductionCoefficient float64     `json:"production_coefficient"` // 单件加工时间（秒/件）
-	DailyWorkMinutes      int         `json:"daily_work_minutes"`     // 每日应工作分钟数（扣除休息后）
-	BreakTimes            []BreakTime `json:"break_times"`            // 休息时间段列表
-}
-
-// getConfigDir 获取配置目录
-func (a *App) getConfigDir() (string, error) {
-	// 获取用户配置目录
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("获取用户目录失败: %v", err)
-	}
-
-	configDir := filepath.Join(homeDir, ".spd_jghj")
-
-	// 确保目录存在
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return "", fmt.Errorf("创建配置目录失败: %v", err)
-	}
-
-	return configDir, nil
-}
-
-// getConfigFilePath 获取配置文件路径
-func (a *App) getConfigFilePath() (string, error) {
-	configDir, err := a.getConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(configDir, "user_config.json"), nil
-}
+type BreakTime = service.BreakTime
+type UserConfig = service.UserConfig
 
 // GetDailyWorkMinutes 获取每日应工作分钟数（扣除休息后）
 func (a *App) GetDailyWorkMinutes() (int, error) {
-	configPath, err := a.getConfigFilePath()
-	if err != nil {
-		return 460, err // 默认值：7小时40分钟
-	}
-
-	// 如果文件不存在，返回默认值
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return 460, nil
-	}
-
-	// 读取配置文件
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return 460, fmt.Errorf("读取配置文件失败: %v", err)
-	}
-
-	var config UserConfig
-	if err := json.Unmarshal(data, &config); err != nil {
-		return 460, fmt.Errorf("解析配置文件失败: %v", err)
-	}
-
-	// 验证值的合理性（应在60-1440分钟之间，即1小时到24小时）
-	if config.DailyWorkMinutes <= 0 || config.DailyWorkMinutes > 1440 {
-		return 460, nil
-	}
-
-	return config.DailyWorkMinutes, nil
+	return service.GetDailyWorkMinutes()
 }
 
 // SetDailyWorkMinutes 设置每日应工作分钟数
 func (a *App) SetDailyWorkMinutes(minutes int) error {
-	if minutes <= 0 || minutes > 1440 {
-		return fmt.Errorf("每日工作分钟数必须在1-1440之间")
-	}
-
-	configPath, err := a.getConfigFilePath()
-	if err != nil {
-		return err
-	}
-
-	// 读取现有配置（如果存在）
-	var config UserConfig
-	if data, err := os.ReadFile(configPath); err == nil {
-		json.Unmarshal(data, &config) // 忽略错误，使用默认值
-	}
-
-	// 更新分钟数
-	config.DailyWorkMinutes = minutes
-
-	// 保存配置
-	data, err := json.MarshalIndent(config, "", "  ")
-	if err != nil {
-		return fmt.Errorf("序列化配置失败: %v", err)
-	}
-
-	if err := os.WriteFile(configPath, data, 0644); err != nil {
-		return fmt.Errorf("保存配置文件失败: %v", err)
-	}
-
-	return nil
+	return service.SetDailyWorkMinutes(minutes)
 }
 
 // GetBreakTimes 获取休息时间段列表
 func (a *App) GetBreakTimes() ([]BreakTime, error) {
-	configPath, err := a.getConfigFilePath()
-	if err != nil {
-		return getDefaultBreakTimes(), err
-	}
-
-	// 如果文件不存在，返回默认值
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return getDefaultBreakTimes(), nil
-	}
-
-	// 读取配置文件
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return getDefaultBreakTimes(), fmt.Errorf("读取配置文件失败: %v", err)
-	}
-
-	var config UserConfig
-	if err := json.Unmarshal(data, &config); err != nil {
-		return getDefaultBreakTimes(), fmt.Errorf("解析配置文件失败: %v", err)
-	}
-
-	// 如果没有配置，返回默认值
-	if len(config.BreakTimes) == 0 {
-		return getDefaultBreakTimes(), nil
-	}
-
-	return config.BreakTimes, nil
-}
-
-// getDefaultBreakTimes 获取默认休息时间段
-func getDefaultBreakTimes() []BreakTime {
-	return []BreakTime{
-		{ID: 1, Name: "上午茶歇", StartHour: 9, StartMin: 40, EndHour: 9, EndMin: 50},
-		{ID: 2, Name: "午餐休息", StartHour: 11, StartMin: 40, EndHour: 12, EndMin: 20},
-		{ID: 3, Name: "下午茶歇", StartHour: 14, StartMin: 20, EndHour: 14, EndMin: 30},
-	}
+	return service.GetBreakTimes()
 }
 
 // SetBreakTimes 设置休息时间段列表
 func (a *App) SetBreakTimes(breakTimes []BreakTime) error {
-	// 验证时间段的合理性
-	for _, bt := range breakTimes {
-		if bt.StartHour < 0 || bt.StartHour > 23 || bt.EndHour < 0 || bt.EndHour > 23 {
-			return fmt.Errorf("小时必须在0-23之间")
-		}
-		if bt.StartMin < 0 || bt.StartMin > 59 || bt.EndMin < 0 || bt.EndMin > 59 {
-			return fmt.Errorf("分钟必须在0-59之间")
-		}
-		startInMin := bt.StartHour*60 + bt.StartMin
-		endInMin := bt.EndHour*60 + bt.EndMin
-		if startInMin >= endInMin {
-			return fmt.Errorf("结束时间必须晚于开始时间")
-		}
-	}
-
-	configPath, err := a.getConfigFilePath()
-	if err != nil {
-		return err
-	}
-
-	// 读取现有配置（如果存在）
-	var config UserConfig
-	if data, err := os.ReadFile(configPath); err == nil {
-		json.Unmarshal(data, &config) // 忽略错误，使用默认值
-	}
-
-	// 更新休息时间段
-	config.BreakTimes = breakTimes
-
-	// 保存配置
-	data, err := json.MarshalIndent(config, "", "  ")
-	if err != nil {
-		return fmt.Errorf("序列化配置失败: %v", err)
-	}
-
-	if err := os.WriteFile(configPath, data, 0644); err != nil {
-		return fmt.Errorf("保存配置文件失败: %v", err)
-	}
-
-	return nil
+	return service.SetBreakTimes(breakTimes)
 }
 
 // GetSystemConfig 获取完整的系统配置
 func (a *App) GetSystemConfig() (*UserConfig, error) {
-	configPath, err := a.getConfigFilePath()
-	if err != nil {
-		return getDefaultConfig(), err
-	}
-
-	// 如果文件不存在，返回默认值
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return getDefaultConfig(), nil
-	}
-
-	// 读取配置文件
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return getDefaultConfig(), fmt.Errorf("读取配置文件失败: %v", err)
-	}
-
-	var config UserConfig
-	if err := json.Unmarshal(data, &config); err != nil {
-		return getDefaultConfig(), fmt.Errorf("解析配置文件失败: %v", err)
-	}
-
-	// 填充默认值
-	if config.ProductionCoefficient <= 0 {
-		config.ProductionCoefficient = 100.0
-	}
-	if config.DailyWorkMinutes <= 0 {
-		config.DailyWorkMinutes = 460
-	}
-	if len(config.BreakTimes) == 0 {
-		config.BreakTimes = getDefaultBreakTimes()
-	}
-
-	return &config, nil
-}
-
-// getDefaultConfig 获取默认配置
-func getDefaultConfig() *UserConfig {
-	return &UserConfig{
-		ProductionCoefficient: 100.0,
-		DailyWorkMinutes:      460,
-		BreakTimes:            getDefaultBreakTimes(),
-	}
+	return service.GetSystemConfig()
 }
 
 // SetSystemConfig 设置完整的系统配置
 func (a *App) SetSystemConfig(config *UserConfig) error {
-	// 验证配置
-	if config.ProductionCoefficient <= 0 {
-		return fmt.Errorf("单件加工时间必须大于0")
-	}
-	if config.DailyWorkMinutes <= 0 || config.DailyWorkMinutes > 1440 {
-		return fmt.Errorf("每日工作分钟数必须在1-1440之间")
-	}
-
-	// 验证休息时间段
-	for _, bt := range config.BreakTimes {
-		if bt.StartHour < 0 || bt.StartHour > 23 || bt.EndHour < 0 || bt.EndHour > 23 {
-			return fmt.Errorf("小时必须在0-23之间")
-		}
-		if bt.StartMin < 0 || bt.StartMin > 59 || bt.EndMin < 0 || bt.EndMin > 59 {
-			return fmt.Errorf("分钟必须在0-59之间")
-		}
-		startInMin := bt.StartHour*60 + bt.StartMin
-		endInMin := bt.EndHour*60 + bt.EndMin
-		if startInMin >= endInMin {
-			return fmt.Errorf("结束时间必须晚于开始时间")
-		}
-	}
-
-	configPath, err := a.getConfigFilePath()
-	if err != nil {
-		return err
-	}
-
-	// 保存配置
-	data, err := json.MarshalIndent(config, "", "  ")
-	if err != nil {
-		return fmt.Errorf("序列化配置失败: %v", err)
-	}
-
-	if err := os.WriteFile(configPath, data, 0644); err != nil {
-		return fmt.Errorf("保存配置文件失败: %v", err)
-	}
-
-	return nil
+	return service.SetSystemConfig(config)
 }
 
 // ========================================================
@@ -1735,88 +1284,12 @@ func (a *App) SetSystemConfig(config *UserConfig) error {
 
 // GetTodayEnergyConsumption 获取今日电能消耗（最大值-最小值）
 func (a *App) GetTodayEnergyConsumption(varID int64) (float64, error) {
-	now := time.Now()
-	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-
-	var result struct {
-		MaxVal *float64 `gorm:"column:max_val"`
-		MinVal *float64 `gorm:"column:min_val"`
-	}
-
-	err := database.DB.Table("sys_data_history").
-		Select("MAX(val) as max_val, MIN(val) as min_val").
-		Where("var_id = ? AND created_at >= ? AND val IS NOT NULL", varID, todayStart).
-		Scan(&result).Error
-
-	if err != nil {
-		return 0, fmt.Errorf("查询今日电能失败: %v", err)
-	}
-
-	if result.MaxVal == nil || result.MinVal == nil {
-		return 0, nil
-	}
-
-	consumption := *result.MaxVal - *result.MinVal
-	if consumption < 0 {
-		consumption = 0
-	}
-
-	return consumption, nil
+	return service.GetTodayEnergyConsumption(varID)
 }
 
-// DeviceEnergyData 设备能耗数据
-type DeviceEnergyData struct {
-	DeviceID         int     `json:"device_id"`
-	DeviceName       string  `json:"device_name"`
-	RealTimePower    float64 `json:"real_time_power"`
-	TodayConsumption float64 `json:"today_consumption"`
-	PowerUnit        string  `json:"power_unit"`
-	EnergyUnit       string  `json:"energy_unit"`
-}
+type DeviceEnergyData = service.DeviceEnergyData
 
 // GetAllDevicesEnergyData 获取所有设备能耗数据
 func (a *App) GetAllDevicesEnergyData() ([]*DeviceEnergyData, error) {
-	// 配置：设备ID -> (功率变量ID, 电能变量ID)
-	config := map[int]struct {
-		PowerVarID  int64
-		EnergyVarID int64
-	}{
-		1: {PowerVarID: 86, EnergyVarID: 81},
-		2: {PowerVarID: 110, EnergyVarID: 107},
-	}
-
-	tagManager := core.GetTagManager()
-	results := make([]*DeviceEnergyData, 0, len(config))
-
-	for deviceID, cfg := range config {
-		data := &DeviceEnergyData{
-			DeviceID:   deviceID,
-			PowerUnit:  "kW",
-			EnergyUnit: "kWh",
-		}
-
-		// 获取设备名称
-		if device, err := database.GetDeviceByID(deviceID); err == nil {
-			data.DeviceName = device.DeviceName
-		} else {
-			data.DeviceName = fmt.Sprintf("设备%d", deviceID)
-		}
-
-		// 从内存获取实时功率
-		if powerTag, ok := tagManager.GetTag(cfg.PowerVarID); ok && powerTag != nil {
-			data.RealTimePower = powerTag.GetValue()
-			if powerTag.Unit != "" {
-				data.PowerUnit = powerTag.Unit
-			}
-		}
-
-		// 从历史表计算今日电能
-		if consumption, err := a.GetTodayEnergyConsumption(cfg.EnergyVarID); err == nil {
-			data.TodayConsumption = consumption
-		}
-
-		results = append(results, data)
-	}
-
-	return results, nil
+	return service.GetAllDevicesEnergyData()
 }

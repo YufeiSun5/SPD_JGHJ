@@ -70,7 +70,7 @@ export function GetAllActiveSessions():Promise<Array<models.ProMachineSession>>;
 
 export function GetAllDevices():Promise<Array<models.SysDevice>>;
 
-export function GetAllDevicesEnergyData():Promise<Array<main.DeviceEnergyData>>;
+export function GetAllDevicesEnergyData():Promise<Array<service.DeviceEnergyData>>;
 
 export function GetAllDevicesStatus():Promise<Array<service.DeviceStatusData>>;
 
@@ -94,11 +94,11 @@ export function GetAllTeams(arg1:any):Promise<Array<models.SysTeam>>;
 
 export function GetAllVariables():Promise<Array<database.VariableRow>>;
 
-export function GetBreakTimes():Promise<Array<main.BreakTime>>;
+export function GetBreakTimes():Promise<Array<service.BreakTime>>;
 
 export function GetChannelStats():Promise<Record<string, number>>;
 
-export function GetCurrentShift():Promise<main.ShiftConfig>;
+export function GetCurrentShift():Promise<service.ShiftConfig>;
 
 export function GetDailyQualityByRun():Promise<Array<database.DeviceQualityStat>>;
 
@@ -142,13 +142,13 @@ export function GetSessionHistory(arg1:any,arg2:any,arg3:string,arg4:string):Pro
 
 export function GetSessionStats(arg1:number):Promise<models.SessionStatusResponse>;
 
-export function GetShiftSchedules():Promise<Array<main.ShiftScheduleConfig>>;
+export function GetShiftSchedules():Promise<Array<service.ShiftScheduleConfig>>;
 
 export function GetShiftSnapshots(arg1:string,arg2:string,arg3:any,arg4:any,arg5:any,arg6:string):Promise<Array<models.ProShiftSnapshot>>;
 
-export function GetShifts():Promise<Array<main.ShiftConfig>>;
+export function GetShifts():Promise<Array<service.ShiftConfig>>;
 
-export function GetShiftsForLogicalDay():Promise<Array<main.LogicalDayShift>>;
+export function GetShiftsForLogicalDay():Promise<Array<service.LogicalDayShift>>;
 
 export function GetStaffAttendance(arg1:number,arg2:string,arg3:string):Promise<Array<models.ProMachineSession>>;
 
@@ -156,7 +156,7 @@ export function GetStaffEfficiency(arg1:time.Time,arg2:time.Time):Promise<Array<
 
 export function GetStaffHistory(arg1:number):Promise<Array<models.SysStaffHistory>>;
 
-export function GetSystemConfig():Promise<main.UserConfig>;
+export function GetSystemConfig():Promise<service.UserConfig>;
 
 export function GetSystemMonitor():Promise<Record<string, any>>;
 
@@ -178,9 +178,9 @@ export function QueryAIStreamWithQueue(arg1:string):Promise<void>;
 
 export function RegenerateShiftSnapshot(arg1:string,arg2:number,arg3:number):Promise<void>;
 
-export function SaveShiftSchedules(arg1:Array<main.ShiftScheduleConfig>):Promise<void>;
+export function SaveShiftSchedules(arg1:Array<service.ShiftScheduleConfig>):Promise<void>;
 
-export function SetBreakTimes(arg1:Array<main.BreakTime>):Promise<void>;
+export function SetBreakTimes(arg1:Array<service.BreakTime>):Promise<void>;
 
 export function SetDailyWorkMinutes(arg1:number):Promise<void>;
 
@@ -188,7 +188,7 @@ export function SetDeviceCycleTime(arg1:number,arg2:number):Promise<void>;
 
 export function SetDeviceSchedule(arg1:number,arg2:number):Promise<void>;
 
-export function SetSystemConfig(arg1:main.UserConfig):Promise<void>;
+export function SetSystemConfig(arg1:service.UserConfig):Promise<void>;
 
 export function StartProductionSmart(arg1:number):Promise<models.ProProductionRun>;
 
